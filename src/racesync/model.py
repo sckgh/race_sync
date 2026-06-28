@@ -164,3 +164,11 @@ def geodetic_to_local(lat: float, lon: float, ref_lat: float, ref_lon: float) ->
     east = math.radians(lon - ref_lon) * math.cos((lat_r + ref_lat_r) / 2.0) * EARTH_RADIUS_M
     north = math.radians(lat - ref_lat) * EARTH_RADIUS_M
     return east, north
+
+
+def local_to_geodetic(east: float, north: float, ref_lat: float, ref_lon: float) -> tuple[float, float]:
+    """Inverse of :func:`geodetic_to_local`: local metres -> (lat, lon) decimal degrees."""
+    lat = ref_lat + math.degrees(north / EARTH_RADIUS_M)
+    mean_lat_r = (math.radians(lat) + math.radians(ref_lat)) / 2.0
+    lon = ref_lon + math.degrees(east / (EARTH_RADIUS_M * math.cos(mean_lat_r)))
+    return lat, lon

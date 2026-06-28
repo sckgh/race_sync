@@ -37,8 +37,10 @@ src/racesync/
   injection/      # Live car injection (C3): SimInjectionAdapter, AC stub, latency spike
   console.py      # Operator console (C8): commands + live dashboard
   sources/udp.py  # Car -> RaceSync position uplink (UDP telemetry, specs/12)
+  simgen.py       # NMEA 0183 test-data generator (N cars, varying speeds, SMSP-anchored)
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere; 87 tests)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 92 tests)
+examples/nmea/    # generated per-car NMEA + combined timeline (see gen-nmea)
 examples/         # sample_feed.jsonl — a ready-to-replay recorded feed
 specs/            # Design documents
 ```
@@ -52,6 +54,7 @@ python -m racesync.cli replay examples/sample_feed.jsonl --record out.jsonl  # c
 python -m racesync.cli spike examples/sample_feed.jsonl    # injection latency spike (offline)
 python -m racesync.cli console                             # operator console (scripted demo)
 python -m racesync.cli console --interactive              # operator console (REPL)
+python -m racesync.cli gen-nmea --cars 10 --rate 10 --duration 60  # NMEA 0183 test data
 ```
 
 ## Quick start (dev)

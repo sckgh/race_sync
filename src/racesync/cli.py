@@ -223,6 +223,44 @@ def _console(args) -> int:
     return 0
 
 
+def _gen_nmea(args) -> int:
+    """Generate NMEA 0183 test data for a field of cars (specs/11, specs/12)."""
+    from pathlib import Path
+
+    from .simgen import default_field, make_smsp_track, sample_to_nmea, simulate
+
+    track = make_smsp_track()
+    cars = default_field(args.cars, base=args.base_speed)
+    samples = simulate(track, cars, rate_hz=args.rate, duration_s=args.duration)
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    # Per-car NMEA files (what each receiver would emit).
+    per_car: dict[str, list[str]] = {c.car_id: [] for c in cars}
+    combined: list[str] = []
+    for s in samples:
+        g, r = sample_to_nmea(s)
+        per_car[s.car_id].extend((g, r))
+        combined.append(f"{s.t:.3f} {s.car_id} {g}")
+        combined.append(f"{s.t:.3f} {s.car_id} {r}")
+    for cid, lines in per_car.items():
+        (out / f"car_{cid}.nmea").write_text("\n".join(lines) + "\n")
+    (out / "combined.timeline.txt").write_text("\n".join(combined) + "\n")
+
+    print(f"track: {track.name}  length={track.length:.0f} m  "
+          f"ref=({track.ref[0]:.5f},{track.ref[1]:.5f})")
+    print(f"cars: {len(cars)} @ {args.rate:g} Hz for {args.duration:g}s "
+          f"(speeds {cars[0].base_speed:.0f}-{cars[-1].base_speed:.0f} m/s = "
+          f"{cars[0].base_speed*3.6:.0f}-{cars[-1].base_speed*3.6:.0f} km/h)")
+    print(f"wrote {len(cars)} per-car .nmea files + combined.timeline.txt to {out}/\n")
+    print("sample (car_01, first GGA + RMC):")
+    g, r = sample_to_nmea(samples[0] if samples[0].car_id == "01" else
+                          next(s for s in samples if s.car_id == "01"))
+    print(f"  {g}\n  {r}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="racesync", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -252,6 +290,14 @@ def main(argv=None) -> int:
     p_console.add_argument("--interactive", action="store_true",
                            help="drop into the interactive command REPL")
     p_console.set_defaults(func=_console)
+
+    p_gen = sub.add_parser("gen-nmea", help="generate NMEA 0183 test data for N cars")
+    p_gen.add_argument("--cars", type=int, default=10)
+    p_gen.add_argument("--rate", type=float, default=10.0, help="samples/sec per car (Hz)")
+    p_gen.add_argument("--duration", type=float, default=60.0, help="seconds")
+    p_gen.add_argument("--base-speed", type=float, default=45.0, help="slowest car m/s")
+    p_gen.add_argument("--out", default="examples/nmea", help="output directory")
+    p_gen.set_defaults(func=_gen_nmea)
 
     args = parser.parse_args(argv)
     return args.func(args)

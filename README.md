@@ -38,11 +38,12 @@ src/racesync/
   scoring.py      # Scoring (C6): separate real/virtual classes, timed finish, penalties
   injection/      # Live car injection (C3): adapter + AC client/receiver + latency spike
   console.py      # Operator console (C8): commands + live dashboard
+  web.py          # Live combined timing + track-map web view (Strategy-3 fallback / demo)
   viz.py          # Standalone visualizer: render cars on the track to SVG / ASCII
   sources/udp.py  # Car -> RaceSync position uplink (UDP telemetry, specs/12)
   simgen.py       # NMEA 0183 test-data generator (N cars, varying speeds, SMSP-anchored)
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere; 103 tests)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 115 tests)
 examples/nmea/    # generated per-car NMEA + combined timeline (see gen-nmea)
 tools/ac_companion/  # Assetto Corsa app: receives phantoms, draws overlay (for when AC is open)
 .github/workflows/   # CI: tests on py3.11-3.13 + lint + CLI smoke
@@ -59,6 +60,7 @@ python -m racesync.cli replay examples/sample_feed.jsonl --record out.jsonl  # c
 python -m racesync.cli spike examples/sample_feed.jsonl    # injection latency spike (offline)
 python -m racesync.cli console                             # operator console (scripted demo)
 python -m racesync.cli console --interactive              # operator console (REPL)
+python -m racesync.cli broadcast                          # live web view -> http://127.0.0.1:8013
 python -m racesync.cli gen-nmea --cars 10 --rate 10 --duration 60  # NMEA 0183 test data
 python -m racesync.cli spike --nmea-dir examples/nmea       # spike on the 10-car NMEA field
 python -m racesync.cli visualize --nmea-dir examples/nmea --out cars.svg  # see the cars

@@ -380,6 +380,23 @@ def _gen_nmea(args) -> int:
     return 0
 
 
+def _broadcast(args) -> int:
+    """Start the live combined timing + track-map web view.
+
+    Args:
+        args: Parsed CLI arguments (``track``, ``host``, ``port``, ``speed``).
+
+    Returns:
+        Process exit code.
+    """
+    from .web import LiveSession, serve
+
+    track = TrackFrame.from_geojson_line(args.track) if args.track else None
+    session = LiveSession(track=track)
+    serve(session, host=args.host, port=args.port)
+    return 0
+
+
 def _ac_bridge(args) -> int:
     """Run the UDP -> shared-memory bridge that feeds the CSP Lua phantom script.
 
@@ -446,6 +463,14 @@ def main(argv=None) -> int:
     p_viz.add_argument("--out", default="cars.svg", help="output SVG path")
     p_viz.add_argument("--banner", default="", help="banner text (e.g. race state)")
     p_viz.set_defaults(func=_visualize)
+
+    p_bcast = sub.add_parser("broadcast",
+                             help="live combined timing + track-map web view (Strategy-3)")
+    p_bcast.add_argument("--track", help="GeoJSON LineString centreline (optional)")
+    p_bcast.add_argument("--host", default="127.0.0.1")
+    p_bcast.add_argument("--port", type=int, default=8013)
+    p_bcast.add_argument("--speed", type=float, default=1.0, help="playback speed multiplier")
+    p_bcast.set_defaults(func=_broadcast)
 
     p_bridge = sub.add_parser("ac-bridge",
                               help="UDP phantom packets -> shared-memory frame for CSP Lua")

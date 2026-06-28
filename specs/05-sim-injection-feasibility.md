@@ -152,3 +152,24 @@ operator/scoring/audio/state work (#06–#08) is unaffected either way.
 - **F-05-5** The platform MUST allow imposing **virtual Code 60** on the human virtual field
   (#06); if it cannot, that platform is disqualified for injection.
 - **NF-05-1** Injection end-to-end latency targets per #09; measured continuously by C7.
+
+## 5.7 Spike harness (implemented)
+
+The measurement scaffolding for §5.4 exists in code (`src/racesync/injection/`):
+
+- **`SimInjectionAdapter`** — the platform-agnostic C3 boundary (F-05-1). Implementations:
+  `LoopbackAdapter` (in-memory, for testing the rig with no sim) and `AssettoCorsaAdapter`
+  (streams phantom states over UDP to an AC companion plugin — the S1 target).
+- **`PhantomState` / `GlobalSimState`** — the per-car world-state and field-wide state
+  (Code 60 / chequered) authored into the sim.
+- **`InjectionHarness`** — drives position estimates through an adapter and measures
+  end-to-end injection latency, scoring a run **PASS / MARGINAL / FAIL** against the #09
+  targets (p50 ≤ 250 ms, p95 ≤ 500 ms).
+- CLI: `racesync spike <feed>` runs the **offline simulation mode** (modelled latency, to
+  exercise the machinery). A **live** spike swaps in the AC adapter, feeds real captured
+  timestamps, and validates that AC actually renders the phantom — that is the step that
+  produces a real verdict and the decision gate above.
+
+> What the code does **not** yet do is prove AC renders an externally-authored car — that
+> requires building the AC companion plugin and running S1 on real hardware. The harness
+> makes that experiment measurable and repeatable; it does not pre-judge it.

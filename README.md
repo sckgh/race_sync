@@ -34,8 +34,9 @@ src/racesync/
   recording.py    # FeedRecorder: capture raw feeds to JSONL (inverse of replay)
   health.py       # HealthMonitor (C7): feed freshness/rate, GO/DEGRADED/FAULT, alarms
   scoring.py      # Scoring (C6): separate real/virtual classes, timed finish, penalties
+  injection/      # Live car injection (C3): SimInjectionAdapter, AC stub, latency spike
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere; 54 tests)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 70 tests)
 examples/         # sample_feed.jsonl — a ready-to-replay recorded feed
 specs/            # Design documents
 ```
@@ -46,6 +47,7 @@ specs/            # Design documents
 python -m racesync.cli demo                       # synthetic feed through the pipeline
 python -m racesync.cli replay examples/sample_feed.jsonl   # replay a recorded feed
 python -m racesync.cli replay examples/sample_feed.jsonl --record out.jsonl  # capture parity
+python -m racesync.cli spike examples/sample_feed.jsonl    # injection latency spike (offline)
 ```
 
 ## Quick start (dev)

@@ -18,6 +18,8 @@ from .bus import TOPIC_STATE, EventBus
 from .fusion import Fusion
 from .health import HealthMonitor
 from .model import RaceState, TimingEvent, TimingEventKind
+from .injection import InjectionHarness, LoopbackAdapter
+from .injection.assetto_corsa import AssettoCorsaAdapter
 from .recording import FeedRecorder
 from .runner import Pipeline
 from .scoring import CarClass, Entry, ScoringService, format_classification
@@ -145,6 +147,47 @@ def _replay(args) -> int:
     return 0
 
 
+def _spike(args) -> int:
+    """Phase-1 injection spike: drive a feed's positions into a sim adapter, measure latency.
+
+    This is the OFFLINE simulation mode (specs/05 §5.4): replay timestamps are logical, so
+    latency is modelled (``--sim-latency`` base + small deterministic jitter) to exercise
+    the measurement + scoring machinery. A LIVE spike swaps the loopback adapter for the AC
+    adapter, feeds real captured timestamps, and lets the harness time the clock directly.
+    """
+    track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
+    fusion = Fusion(track)
+
+    if args.use_ac:
+        adapter = AssettoCorsaAdapter(host=args.ac_host, port=args.ac_port)
+        print(f"target: Assetto Corsa companion at {args.ac_host}:{args.ac_port} "
+              f"(UDP send only — does NOT prove AC renders the car; see specs/05)")
+    else:
+        adapter = LoopbackAdapter()
+        print("target: loopback adapter (in-memory)")
+    adapter.connect()
+
+    # Build the position estimates from the feed via fusion.
+    estimates = []
+    for event in ReplaySource(args.feed).stream():
+        if isinstance(event, RawFix):
+            estimates.append(fusion.on_fix(event))
+        elif isinstance(event, TimingEvent):
+            fusion.on_timing_event(event)
+
+    harness = InjectionHarness(adapter)
+    base = args.sim_latency
+    report = harness.run(estimates, latency_model=lambda i, e: base + (i % 5) * 0.01)
+    adapter.close()
+
+    print(f"phantoms injected: {adapter.health().get('phantoms', len(adapter.spawned))}  "
+          f"from {len(estimates)} position estimates\n")
+    print(report)
+    print("\n(offline simulation — modelled latency. Run a LIVE spike with real timestamps "
+          "and an AC companion to get a real verdict; see specs/05 §5.4.)")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="racesync", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -158,6 +201,17 @@ def main(argv=None) -> int:
     p_replay.add_argument("--track", help="GeoJSON LineString centreline (optional)")
     p_replay.add_argument("--record", help="capture raw events to a JSONL file (parity check)")
     p_replay.set_defaults(func=_replay)
+
+    p_spike = sub.add_parser("spike", help="run the injection latency spike on a feed")
+    p_spike.add_argument("feed", help="path to a JSONL feed file")
+    p_spike.add_argument("--track", help="GeoJSON LineString centreline (optional)")
+    p_spike.add_argument("--sim-latency", type=float, default=0.08,
+                         help="modelled base injection latency in seconds (offline mode)")
+    p_spike.add_argument("--use-ac", action="store_true",
+                         help="send to an Assetto Corsa companion over UDP instead of loopback")
+    p_spike.add_argument("--ac-host", default="127.0.0.1")
+    p_spike.add_argument("--ac-port", type=int, default=9013)
+    p_spike.set_defaults(func=_spike)
 
     args = parser.parse_args(argv)
     return args.func(args)

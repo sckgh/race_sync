@@ -23,6 +23,14 @@ local MAX_CARS = 64
 local HEADER_SIZE = 16
 local RECORD_SIZE = 24
 
+-- Collision (specs/13 §13.9). Phantoms can be made collidable via CSP Lua physics rigid
+-- bodies (kinetic: they push the player but are not pushed back — the correct model, since
+-- the real car never felt the contact). Gate it on data quality so contact is only solid
+-- when the fix is RTK-grade and fresh; otherwise the phantom is a pass-through ghost.
+local COLLIDABLE = false           -- start false; enable after RTK fidelity is validated
+local COLLIDE_QUALITY_MIN = 0.9    -- quality >= this -> solid; below -> ghost
+local CAR_BOX = { 4.5, 1.2, 1.9 }  -- collider size in metres (length, height, width)
+
 -- Calibration: RaceSync (x, y) metres -> AC world (x, z). Replace with values solved in
 -- Step 2 (scale, rotation theta, translation). Identity until calibrated.
 local CAL = { scale = 1.0, theta = 0.0, tx = 0.0, tz = 0.0 }
@@ -67,10 +75,17 @@ local function parse_and_apply(bytes)
     local x, y, heading = 0.0, 0.0, 0.0
     local ax, az = racesync_to_ac(x, y)
 
+    -- TODO: decode quality (last float in the record) for the collision gate below.
+    local quality = 1.0
+
     local p = phantoms[car_num]
     if p == nil then
       -- TODO(acc-lua-internal/traffic): spawn a low-LOD car mesh with a 'BODY' node.
-      p = { x = ax, z = az, heading = heading }
+      -- TODO(collision, acc-lua-sdk ac_physics): if COLLIDABLE, create a KINETIC rigid body
+      --   for this phantom with a box collider CAR_BOX (kinetic = impacts the player but is
+      --   not impacted back). Keep a handle on p.body to move/toggle it each frame.
+      --   e.g. p.body = physics.RigidBody{ colliders = { box = CAR_BOX }, kinetic = true }
+      p = { x = ax, z = az, heading = heading, body = nil }
       phantoms[car_num] = p
     end
     -- Smooth toward the new target (interpolate to avoid teleport/strobe).
@@ -78,6 +93,13 @@ local function parse_and_apply(bytes)
     p.z = p.z + (az - p.z) * 0.5
     p.heading = heading
     -- TODO: set the mesh BODY node transform from (p.x, p.z, p.heading).
+
+    -- Collision gate (specs/13 §13.9): solid only when data is RTK-grade and fresh.
+    if COLLIDABLE and p.body ~= nil then
+      local solid = (quality >= COLLIDE_QUALITY_MIN) and not code60
+      -- TODO(ac_physics): p.body:setTransform(p.x, p.z, p.heading) and
+      --   p.body:setCollisionEnabled(solid)  -- ghost/pass-through when not solid
+    end
   end
   -- TODO: reflect code60 (e.g. tint phantoms / show a banner).
 end

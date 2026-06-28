@@ -153,7 +153,7 @@ exploring.
 |------|------------|
 | CSP Lua mmap/struct API differs from the starter's assumptions | Confirm against acc-lua-sdk; the layout is isolated in `shm_bridge.py` + the Lua header so only one place changes |
 | Coordinate calibration is off → cars beside/under the track | Step 2 least-squares from ≥3 points; verify with `visualize` first; pursue a surveyed centreline (TBC-1) |
-| Phantoms don't appear in replays / aren't collidable | Accept for Tier B (visual); escalate to Tier C only if contact is required |
+| Phantoms don't appear in replays | Accept for Tier B (client-side); not needed for live racing. Collision is separately achievable — see §13.9 |
 | Count scaling (toward 56) costs frame-rate | CSP traffic handles ~2000 cars cheaply; still measure FPS as N grows |
 | Latency through bridge+Lua exceeds budget | Measure (Step 4); raise feed rate, interpolate, co-locate the bridge with the client |
 
@@ -162,7 +162,68 @@ exploring.
 - **O-20** Confirm CSP Lua's shared-memory/struct read API and whether it can open UDP
   directly (would remove the bridge).
 - **O-21** SMSP track mod choice + surveyed centreline for exact calibration (TBC-1).
-- **O-22** Whether Tier B phantoms get colliders (local contact) or remain pass-through.
+- **O-22** Collision fidelity tuning — collider size, the quality/latency gate thresholds,
+  and whether contact is one-way only (see §13.9).
+
+## 13.9 Phantom collision (can you hit them?)
+
+**Yes — collidable phantoms are achievable in CSP**, and it's the difference between
+*seeing* the real field and *racing* it. Two proven mechanisms:
+
+- **CSP Lua physics rigid bodies** (recommended): create one rigid body per phantom with a
+  geometric collider (Box/Capsule sized to the car), and drive its transform from the GPS
+  feed each frame. CSP rigid bodies can be **kinetic** — they *impact the scene but are not
+  impacted back* — which is exactly the phantom case.
+- **CSP traffic-tool cars**, which are already **fully collidable** with the player (real
+  crash physics, not ghosts); drive them via the traffic system instead of a bare rigid body.
+
+### One-way (kinetic) collision is the *correct* model
+
+A phantom is authored from the real car's live position. When a virtual driver makes contact:
+
+- the **virtual car** reacts normally (gets pushed, loses time) — good, that's racing;
+- the **phantom** keeps tracking the real car's true line and **does not deflect** — also
+  correct, because the *real* driver felt nothing and carried on.
+
+So "kinetic, not impacted back" isn't a limitation here — it faithfully models a real car
+that is oblivious to the virtual contact. (A two-way model would wrongly knock the phantom
+off the real car's actual trajectory.)
+
+### The real catch: fairness under error + latency
+
+Collision fires where the phantom **appears**, which carries GPS error and end-to-end
+latency (~100–250 ms, specs/09). With racing-grade **RTK-fixed** data this is sub-car-length
+and fine; when data degrades (RTK float/autonomous, dropouts, dead-reckoning) a virtual
+driver could be shoved by a car that wasn't precisely there.
+
+**Design: quality-gated collision** — reuse the `quality` field already in every phantom
+packet (specs/04 §4.2, the `0..1` fix confidence):
+
+| Phantom data state | Collision behaviour |
+|--------------------|--------------------|
+| RTK-fixed **and** fresh (quality ≥ ~0.9, low age) | **Solid collider** — full contact |
+| Degraded (RTK-float / stale / dead-reckoned) | **Ghost / pass-through** — visual only, optional warning tint |
+| No data | phantom parked/removed (specs/04 §4.3) — no collider |
+
+This makes contact trustworthy when the data earns it and automatically backs off when it
+doesn't — no hard call needed at runtime. Thresholds are tunable (O-22).
+
+### Scoring & briefing implications
+
+- Phantom contact costs the **virtual** driver time (and any virtual-class penalty), exactly
+  like contact with another virtual car — feeds straight into scoring (specs/08).
+- This **must be briefed**: virtual drivers are racing representations of real cars whose
+  precision depends on GPS/RTK; under Code 60 the closing speeds are low so contact risk is
+  minimal, which is another reason the Safety-Car → Code 60 mapping (specs/06) matters.
+- Start **non-collidable** for the first on-track spike (validate placement/latency safely),
+  then enable quality-gated collision once RTK fidelity is confirmed.
+
+### Where it's implemented
+
+Client-side, in the CSP Lua script — the phantom packet/bridge already carry everything
+needed (position, heading, **quality**). The starter
+[`tools/ac_companion/csp_phantoms/phantoms.lua`](../tools/ac_companion/csp_phantoms/phantoms.lua)
+has a `COLLIDABLE` toggle and a quality-gate stub at the rigid-body call sites.
 
 ## Sources
 
@@ -172,6 +233,9 @@ exploring.
 - CSP Lua SDK + traffic (spawn/move car meshes, `BODY` node, ~2000 cars):
   [acc-lua-sdk](https://github.com/ac-custom-shaders-patch/acc-lua-sdk),
   [acc-lua-internal `traffic`](https://github.com/ac-custom-shaders-patch/acc-lua-internal/tree/main/included-tools/traffic).
+- CSP Lua physics rigid bodies (kinetic bodies, Box/Sphere/Capsule colliders) + collidable
+  traffic: [acc-lua-sdk `ac_physics.lua`](https://github.com/ac-custom-shaders-patch/acc-lua-sdk/blob/main/common/ac_physics.lua),
+  [CSP physics scripts docs](https://cup.acstuff.club/docs/csp/cars/physics-scripts).
 - AI-in-multiplayer limitation / spline traffic:
   [AssettoServer FAQ](https://assettoserver.org/docs/next/faq/),
   [OverTake — AI cars in MP](https://www.overtake.gg/threads/question-for-devs-modders-ai-cars-in-multiplayer-servers.265191/).

@@ -52,6 +52,9 @@ speed and heading, at a useful rate.
   sub-2 m accuracy (RTK-corrected GNSS reaches cm-level). Whether such units are fitted is
   **TBC-3** (#02).
 
+**Concrete unit options** (rate, RTK, accuracy, pricing, corrections & telemetry
+architecture, fleet cost) are in [`11-gps-hardware-options.md`](11-gps-hardware-options.md).
+
 **Note on "MyLaps GPS":** the brief mentions MyLaps GPS. MyLaps' ecosystem is primarily
 transponder/loop timing; any GPS capability and its rate/accuracy must be verified against
 the actual hardware in use (**TBC-3**). The spec deliberately treats GPS as a generic

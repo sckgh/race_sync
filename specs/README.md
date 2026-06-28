@@ -43,6 +43,7 @@ Read in order for the full picture; each file is self-contained.
 | 10 | [`10-delivery-plan-and-risks.md`](10-delivery-plan-and-risks.md) | Phased roadmap, de-risking spikes, open questions |
 | 11 | [`11-gps-hardware-options.md`](11-gps-hardware-options.md) | Affordable RTK GNSS units (rate + accuracy), corrections & telemetry, fleet cost |
 | 12 | [`12-telemetry-and-connectivity.md`](12-telemetry-and-connectivity.md) | How car position gets to RaceSync & the sim: links, Wi-Fi vs cellular vs radio, RTK vs telemetry |
+| 13 | [`13-ac-injection-spike-plan.md`](13-ac-injection-spike-plan.md) | Concrete Assetto Corsa injection spike: CSP Lua phantoms, the IPC bridge, calibration, gates |
 
 ## Status
 

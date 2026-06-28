@@ -313,6 +313,26 @@ def _gen_nmea(args) -> int:
     return 0
 
 
+def _ac_bridge(args) -> int:
+    """Run the UDP -> shared-memory bridge that feeds the CSP Lua phantom script.
+
+    Args:
+        args: Parsed CLI arguments (``file``, ``host``, ``port``).
+
+    Returns:
+        Process exit code.
+    """
+    from .injection.shm_bridge import FRAME_SIZE, ShmBridge
+
+    print(f"ac-bridge: listening UDP {args.host}:{args.port} -> {args.file} "
+          f"({FRAME_SIZE} B frames). Ctrl-C to stop.")
+    try:
+        ShmBridge().run(args.file, host=args.host, port=args.port)
+    except KeyboardInterrupt:
+        print("\nstopped.")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="racesync", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -351,6 +371,14 @@ def main(argv=None) -> int:
     p_viz.add_argument("--out", default="cars.svg", help="output SVG path")
     p_viz.add_argument("--banner", default="", help="banner text (e.g. race state)")
     p_viz.set_defaults(func=_visualize)
+
+    p_bridge = sub.add_parser("ac-bridge",
+                              help="UDP phantom packets -> shared-memory frame for CSP Lua")
+    p_bridge.add_argument("--file", default="racesync_phantoms.bin",
+                          help="memory-mapped frame file the Lua script reads")
+    p_bridge.add_argument("--host", default="0.0.0.0")
+    p_bridge.add_argument("--port", type=int, default=9013)
+    p_bridge.set_defaults(func=_ac_bridge)
 
     p_gen = sub.add_parser("gen-nmea", help="generate NMEA 0183 test data for N cars")
     p_gen.add_argument("--cars", type=int, default=10)

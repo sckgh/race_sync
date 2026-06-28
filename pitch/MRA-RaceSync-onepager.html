@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RaceSync × MRA — one-page brief</title>
+<style>
+  /* ---- MRA brand variables: swap --mra-red for the exact hex from motorrace.com.au ---- */
+  :root{ --mra-red:#e2231a; --virtual:#1f9fe0; --ink:#15191f; --muted:#5b6b7a;
+         --line:#d9e0e6; --bg:#ffffff; --panel:#f5f7f9; }
+  @page{ size:A4; margin:11mm; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  html,body{ margin:0; padding:0; font-family:"Segoe UI",Helvetica,Arial,sans-serif;
+             color:var(--ink); font-size:10.5px; line-height:1.42; background:var(--bg); }
+  .head{ display:flex; justify-content:space-between; align-items:flex-end;
+          border-bottom:3px solid var(--mra-red); padding-bottom:7px; }
+  .brand{ font-size:25px; font-weight:800; letter-spacing:.3px; }
+  .brand .r{ color:var(--mra-red); } .brand .s{ color:var(--virtual); }
+  .tag{ font-size:11px; color:var(--muted); }
+  .logo-ph{ font-size:9px; color:var(--muted); border:1px dashed var(--line);
+            padding:6px 10px; border-radius:4px; text-align:center; }
+  .lead{ margin:9px 0 4px; font-size:12.5px; }
+  .lead b{ color:var(--virtual); } .lead .real{ color:var(--mra-red); font-weight:700; }
+  .cols{ display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:6px; }
+  h2{ font-size:11px; text-transform:uppercase; letter-spacing:.6px; margin:9px 0 3px;
+       color:#fff; background:var(--mra-red); display:inline-block; padding:2px 7px; border-radius:3px; }
+  ul{ margin:3px 0 0; padding-left:15px; } li{ margin:1.5px 0; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:6px;
+           padding:8px 10px; margin-top:4px; }
+  .panel.accent{ border-left:4px solid var(--virtual); }
+  .trial{ border-left:4px solid var(--mra-red); }
+  table{ width:100%; border-collapse:collapse; margin-top:3px; font-size:9.7px; }
+  td,th{ text-align:left; padding:2.5px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; }
+  .ev{ color:var(--mra-red); font-weight:700; }
+  .foot{ margin-top:10px; border-top:1px solid var(--line); padding-top:6px;
+          display:flex; justify-content:space-between; color:var(--muted); font-size:9.3px; }
+  .kicker{ color:var(--virtual); font-weight:700; }
+  b.h{ color:var(--ink); }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div>
+      <div class="brand"><span class="r">Race</span><span class="s">Sync</span></div>
+      <div class="tag">One race. Two worlds.</div>
+    </div>
+    <div class="logo-ph">MRA logo<br>goes here</div>
+  </div>
+
+  <p class="lead">
+    A field of <span class="real">remote sim racers</span> races your
+    <span class="real">real SuperTT enduro</span> — <b>the same race, at the same time</b>,
+    against live digital twins of your real cars, scored as their own class under
+    <b>one MRA permit</b>. <span class="kicker">Trial it at the Wakefield 300; scale it to the Sydney 300.</span>
+  </p>
+
+  <div class="cols">
+    <div>
+      <h2>What's in it for MRA</h2>
+      <ul>
+        <li><b class="h">New revenue</b> — virtual entry fees + fresh sponsor inventory
+            (class naming, in-sim branding, stream overlays).</li>
+        <li><b class="h">Bigger audience</b> — reaches the global sim-racing community;
+            streams natively to Twitch / YouTube.</li>
+        <li><b class="h">A season, not a one-off</b> — a virtual class across all 8 rounds
+            and the three 300 km enduros.</li>
+        <li><b class="h">A standout story</b> — a genuinely novel hybrid enduro that sets
+            MRA apart and earns media.</li>
+      </ul>
+
+      <h2>Fits your operation</h2>
+      <ul>
+        <li>Reads your <b class="h">MyLaps</b> timing / GPS — no change to your timing.</li>
+        <li>Relays your one <b class="h">MRA-RMC</b> Zello race-control voice to virtual drivers too.</li>
+        <li><b class="h">Safety Car → Code 60</b> for the virtual field, automatically.</li>
+        <li>One operator console <b class="h">beside</b> Race Control.</li>
+      </ul>
+
+      <h2>Safe &amp; fair</h2>
+      <ul>
+        <li>One-way: virtual cars <b class="h">can never touch a real car or driver</b>.</li>
+        <li>Separate class, transparent scoring; your official MyLaps result is never overridden.</li>
+        <li><b class="h">Timed finish</b> — virtual cars take the chequer when your real leader
+            completes the distance.</li>
+      </ul>
+    </div>
+
+    <div>
+      <div class="panel trial">
+        <h2>The trial — Wakefield 300</h2>
+        <table>
+          <tr><th>Step</th><th>Event</th><th>When</th></tr>
+          <tr><td><span class="ev">Trial</span></td><td>Wakefield 300 · One Raceway</td><td>28 Feb – 1 Mar 2026</td></tr>
+          <tr><td>Iterate</td><td>Shelley 300 + rounds</td><td>across the season</td></tr>
+          <tr><td><b>Flagship</b></td><td>Sydney 300 · SMSP</td><td>season showcase</td></tr>
+        </table>
+        <div style="margin-top:5px">Low stakes first, flagship last — a few GPS-fitted cars,
+          a small virtual grid, a working fallback at every step. We only ever <i>add</i> to your event.</div>
+      </div>
+
+      <div class="panel accent">
+        <h2>Already real</h2>
+        A working, tested platform today — live timing/GPS ingestion, race-state sync
+        (green / Code 60 / timed finish), the race-audio bridge, and combined real-vs-virtual
+        scoring (100+ automated tests). <b class="h">Honest on the frontier:</b> putting real
+        cars <i>inside</i> the sim is what we're validating now — with a guaranteed fallback
+        (synced virtual race + live combined timing &amp; track-map), so the event is never
+        hostage to unproven tech.
+      </div>
+
+      <div class="panel">
+        <h2>The ask</h2>
+        <ul>
+          <li>Your blessing to run the <b class="h">Wakefield 300 trial</b>.</li>
+          <li>Access (commercial terms) to the <b class="h">MyLaps X2 feed</b>,
+              the <b class="h">MRA-RMC Zello</b> channel, and a <b class="h">test session</b>.</li>
+          <li>A joint chat with <b class="h">Motorsport Australia</b> on permitting a virtual
+              class + Code 60 — you're already aligned with MA for 2026, so it starts warm.</li>
+        </ul>
+        <div style="margin-top:4px">We bring the technology, the build, and the operating crew.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div><b style="color:var(--ink)">RaceSync × Motor Racing Australia</b> — NSW's premier motor racing series</div>
+    <div>Contact: sam@quollsoft.com</div>
+  </div>
+
+</body>
+</html>

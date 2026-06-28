@@ -1,5 +1,7 @@
 # RaceSync
 
+![CI](https://github.com/sckgh/race_sync/actions/workflows/ci.yml/badge.svg)
+
 Sync GPS/timing data from real race cars into a racing simulator, run a remote virtual
 field alongside the physical field as its own class, bridge race-management audio, and
 score both together under one race.
@@ -34,13 +36,16 @@ src/racesync/
   recording.py    # FeedRecorder: capture raw feeds to JSONL (inverse of replay)
   health.py       # HealthMonitor (C7): feed freshness/rate, GO/DEGRADED/FAULT, alarms
   scoring.py      # Scoring (C6): separate real/virtual classes, timed finish, penalties
-  injection/      # Live car injection (C3): SimInjectionAdapter, AC stub, latency spike
+  injection/      # Live car injection (C3): adapter + AC client/receiver + latency spike
   console.py      # Operator console (C8): commands + live dashboard
+  viz.py          # Standalone visualizer: render cars on the track to SVG / ASCII
   sources/udp.py  # Car -> RaceSync position uplink (UDP telemetry, specs/12)
   simgen.py       # NMEA 0183 test-data generator (N cars, varying speeds, SMSP-anchored)
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere; 92 tests)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 103 tests)
 examples/nmea/    # generated per-car NMEA + combined timeline (see gen-nmea)
+tools/ac_companion/  # Assetto Corsa app: receives phantoms, draws overlay (for when AC is open)
+.github/workflows/   # CI: tests on py3.11-3.13 + lint + CLI smoke
 examples/         # sample_feed.jsonl — a ready-to-replay recorded feed
 specs/            # Design documents
 ```
@@ -55,7 +60,16 @@ python -m racesync.cli spike examples/sample_feed.jsonl    # injection latency s
 python -m racesync.cli console                             # operator console (scripted demo)
 python -m racesync.cli console --interactive              # operator console (REPL)
 python -m racesync.cli gen-nmea --cars 10 --rate 10 --duration 60  # NMEA 0183 test data
+python -m racesync.cli spike --nmea-dir examples/nmea       # spike on the 10-car NMEA field
+python -m racesync.cli visualize --nmea-dir examples/nmea --out cars.svg  # see the cars
 ```
+
+### When you have Assetto Corsa open
+
+Install the companion app (`tools/ac_companion/`, see its README), then stream the field at
+it: `python -m racesync.cli spike --nmea-dir examples/nmea --use-ac`. The overlay shows the
+real field moving inside AC. (It visualizes phantoms; it does not yet move collidable cars —
+that's the open Phase-1 spike, see `specs/05`.)
 
 ## Quick start (dev)
 

@@ -96,6 +96,11 @@ class TrackFrame:
             xy = xy[:-1]
         return cls(xy, ref=(ref_lat, ref_lon), name=name or Path(path).stem)
 
+    @property
+    def points(self) -> list[tuple[float, float]]:
+        """A copy of the centreline vertices (x, y) in metres."""
+        return list(self._pts)
+
     # -- conversions -------------------------------------------------------- #
 
     def project(self, x: float, y: float) -> Projection:

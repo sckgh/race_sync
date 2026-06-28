@@ -22,6 +22,7 @@ from .harness import (
     SpikeReport,
     Verdict,
 )
+from .receiver import PhantomReceiver
 
 __all__ = [
     "PhantomState",
@@ -33,4 +34,5 @@ __all__ = [
     "LatencyTargets",
     "SpikeReport",
     "Verdict",
+    "PhantomReceiver",
 ]

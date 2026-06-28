@@ -13,7 +13,7 @@ requires-python = ">=3.11"  # uses ExceptionGroup (bus.py)
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "ruff>=0.1"]
 
 [project.scripts]
 racesync = "racesync.cli:main"
@@ -24,3 +24,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]

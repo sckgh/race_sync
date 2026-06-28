@@ -148,6 +148,35 @@ def _replay(args) -> int:
     return 0
 
 
+def _load_nmea_dir(directory):
+    """Build an NmeaGpsSource from a directory of car_*.nmea files."""
+    from pathlib import Path
+
+    from .sources.gps_nmea import NmeaGpsSource
+
+    files = sorted(Path(directory).glob("car_*.nmea"))
+    if not files:
+        raise SystemExit(f"no car_*.nmea files in {directory}")
+    streams = {f.stem.replace("car_", ""): f.read_text().splitlines() for f in files}
+    return NmeaGpsSource(streams), list(streams)
+
+
+def _estimates_from_feed(args, fusion):
+    """Produce position estimates from either a JSONL feed or an NMEA directory."""
+    if getattr(args, "nmea_dir", None):
+        from .simgen import make_smsp_track  # noqa: F401 (ref kept for clarity)
+
+        src, _cars = _load_nmea_dir(args.nmea_dir)
+        return [fusion.on_fix(fix) for fix in src.stream()]
+    estimates = []
+    for event in ReplaySource(args.feed).stream():
+        if isinstance(event, RawFix):
+            estimates.append(fusion.on_fix(event))
+        elif isinstance(event, TimingEvent):
+            fusion.on_timing_event(event)
+    return estimates
+
+
 def _spike(args) -> int:
     """Phase-1 injection spike: drive a feed's positions into a sim adapter, measure latency.
 
@@ -156,7 +185,12 @@ def _spike(args) -> int:
     the measurement + scoring machinery. A LIVE spike swaps the loopback adapter for the AC
     adapter, feeds real captured timestamps, and lets the harness time the clock directly.
     """
-    track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
+    # NMEA input is SMSP-anchored; pick the matching track so map-matching is meaningful.
+    if getattr(args, "nmea_dir", None):
+        from .simgen import make_smsp_track
+        track = make_smsp_track()
+    else:
+        track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
     fusion = Fusion(track)
 
     if args.use_ac:
@@ -168,14 +202,7 @@ def _spike(args) -> int:
         print("target: loopback adapter (in-memory)")
     adapter.connect()
 
-    # Build the position estimates from the feed via fusion.
-    estimates = []
-    for event in ReplaySource(args.feed).stream():
-        if isinstance(event, RawFix):
-            estimates.append(fusion.on_fix(event))
-        elif isinstance(event, TimingEvent):
-            fusion.on_timing_event(event)
-
+    estimates = _estimates_from_feed(args, fusion)
     harness = InjectionHarness(adapter)
     base = args.sim_latency
     report = harness.run(estimates, latency_model=lambda i, e: base + (i % 5) * 0.01)
@@ -220,6 +247,31 @@ def _console(args) -> int:
         res = console.dispatch(cmd)
         print(f"racesync> {cmd}\n  -> {res.message.splitlines()[0] if res.message else 'ok'}\n")
     print(console.render())
+    return 0
+
+
+def _visualize(args) -> int:
+    """Render car positions on the track to an SVG (and an ASCII preview)."""
+    from .viz import track_ascii, track_svg
+
+    if args.nmea_dir:
+        from .simgen import make_smsp_track
+        track = make_smsp_track()
+    else:
+        track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
+    fusion = Fusion(track)
+
+    # Use the latest fix per car as the snapshot.
+    _estimates_from_feed(args, fusion)
+    cars = [fusion.latest(cid) for cid in fusion.order()]
+    cars = [c for c in cars if c is not None]
+
+    svg = track_svg(track, cars, title=f"{track.name}  ({len(cars)} cars)",
+                    banner=args.banner)
+    from pathlib import Path
+    Path(args.out).write_text(svg)
+    print(f"wrote {args.out}  ({len(cars)} cars on {track.name})\n")
+    print(track_ascii(track, cars, width=72, height=22))
     return 0
 
 
@@ -276,7 +328,8 @@ def main(argv=None) -> int:
     p_replay.set_defaults(func=_replay)
 
     p_spike = sub.add_parser("spike", help="run the injection latency spike on a feed")
-    p_spike.add_argument("feed", help="path to a JSONL feed file")
+    p_spike.add_argument("feed", nargs="?", help="path to a JSONL feed file")
+    p_spike.add_argument("--nmea-dir", help="directory of car_*.nmea files (SMSP track)")
     p_spike.add_argument("--track", help="GeoJSON LineString centreline (optional)")
     p_spike.add_argument("--sim-latency", type=float, default=0.08,
                          help="modelled base injection latency in seconds (offline mode)")
@@ -290,6 +343,14 @@ def main(argv=None) -> int:
     p_console.add_argument("--interactive", action="store_true",
                            help="drop into the interactive command REPL")
     p_console.set_defaults(func=_console)
+
+    p_viz = sub.add_parser("visualize", help="render car positions to an SVG + ASCII map")
+    p_viz.add_argument("feed", nargs="?", help="path to a JSONL feed file")
+    p_viz.add_argument("--nmea-dir", help="directory of car_*.nmea files (SMSP track)")
+    p_viz.add_argument("--track", help="GeoJSON LineString centreline (optional)")
+    p_viz.add_argument("--out", default="cars.svg", help="output SVG path")
+    p_viz.add_argument("--banner", default="", help="banner text (e.g. race state)")
+    p_viz.set_defaults(func=_visualize)
 
     p_gen = sub.add_parser("gen-nmea", help="generate NMEA 0183 test data for N cars")
     p_gen.add_argument("--cars", type=int, default=10)

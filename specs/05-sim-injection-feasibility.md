@@ -170,6 +170,19 @@ The measurement scaffolding for §5.4 exists in code (`src/racesync/injection/`)
   timestamps, and validates that AC actually renders the phantom — that is the step that
   produces a real verdict and the decision gate above.
 
-> What the code does **not** yet do is prove AC renders an externally-authored car — that
-> requires building the AC companion plugin and running S1 on real hardware. The harness
-> makes that experiment measurable and repeatable; it does not pre-judge it.
+Also implemented around the harness:
+
+- **`PhantomReceiver`** (`injection/receiver.py`) — the sim-side decode/world-state endpoint,
+  so the full RaceSync→sim wire loop (encode → transport → decode → world) is tested without
+  a simulator.
+- **AC companion app** (`tools/ac_companion/`) — an Assetto Corsa Python app that receives
+  phantom packets and draws them as an in-sim overlay. It validates the data path and
+  coordinate transform **inside AC**, and is explicit that it does **not** move collidable
+  cars (the AC app API can't) — that is the harder S1 mechanism (server plugin / CSP / mod).
+- **Standalone visualizer** (`viz.py`, `racesync visualize`) — renders the field on the
+  track to SVG/ASCII, so positions can be eyeballed with no sim at all.
+
+> What the code does **not** yet do is prove AC renders an externally-authored *collidable*
+> car — that requires building the deeper S1 mechanism and running it on real hardware. The
+> harness + companion make the experiment measurable, drivable, and repeatable; they do not
+> pre-judge it.

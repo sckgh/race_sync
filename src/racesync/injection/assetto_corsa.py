@@ -51,6 +51,42 @@ def encode_global_packet(state: GlobalSimState) -> bytes:
                        separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def decode_phantom_packet(data: bytes):
+    """Decode a phantom packet -> (PhantomState, seq), or None. Sim-side counterpart.
+
+    This is the reference decoder for the AC companion's network layer; the companion
+    reimplements the same tiny schema in AC's (older) Python. Returns ``None`` for global
+    packets or malformed input.
+    """
+    try:
+        obj = json.loads(data.decode("utf-8", errors="ignore").strip() or "{}")
+    except json.JSONDecodeError:
+        return None
+    if "car" not in obj or "t" not in obj:
+        return None
+    state = PhantomState(
+        car_id=str(obj["car"]), t=float(obj["t"]),
+        x=float(obj.get("x", 0.0)), y=float(obj.get("y", 0.0)),
+        heading=float(obj.get("h", 0.0)),
+        speed=(float(obj["spd"]) if obj.get("spd") is not None else None),
+        quality=float(obj.get("q", 1.0)),
+    )
+    return state, int(obj.get("seq", 0))
+
+
+def decode_global_packet(data: bytes):
+    """Decode a global-state packet -> GlobalSimState, or None."""
+    try:
+        obj = json.loads(data.decode("utf-8", errors="ignore").strip() or "{}")
+    except json.JSONDecodeError:
+        return None
+    g = obj.get("global")
+    if not isinstance(g, dict):
+        return None
+    return GlobalSimState(code60=bool(g.get("code60", False)),
+                          chequered=bool(g.get("chequered", False)))
+
+
 class AssettoCorsaAdapter(SimInjectionAdapter):
     """Streams phantom states to an AC companion plugin over UDP.
 

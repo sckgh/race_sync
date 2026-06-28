@@ -16,11 +16,18 @@ Motorsport Park.
 
 ## Status
 
-Early development. The platform-independent **backbone** is being built first (per the
-delivery plan, [`specs/10-delivery-plan-and-risks.md`](specs/10-delivery-plan-and-risks.md)):
-position model, track projection, pluggable position/timing sources, the race-state
-engine, and an in-process event bus — all testable off recorded feeds, without a live
-track or simulator.
+The platform-independent **backbone is in place and tested** (115 tests, CI on
+Python 3.11–3.13): position model, track projection, pluggable position/timing sources
+(NMEA GPS, UDP telemetry, replay, MyLaps stub), fusion, the race-state engine, the event
+bus, pipeline, feed recorder, health monitor, **scoring** (combined real/virtual classes,
+timed finish), the **operator console**, the **live combined timing + track-map web view**
+(the Strategy-3 fallback), the **injection spike harness + Assetto Corsa companion**, and a
+**broadcast/demo** path — all runnable off recorded feeds, no live track or simulator
+required.
+
+**Open / external:** the live AC injection spike (needs Assetto Corsa, staged and ready),
+and real **MyLaps X2** + **Zello `MRA-RMC`** access (need event sign-off). See the delivery
+plan, [`specs/10-delivery-plan-and-risks.md`](specs/10-delivery-plan-and-risks.md).
 
 ## Layout
 

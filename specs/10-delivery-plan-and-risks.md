@@ -70,6 +70,12 @@ and only invests in the hardest capability (live injection) once it's proven.
 - Capture full audit log; produce final classifications; post-event review feeds the next
   iteration (and the injection R&D track if deferred).
 
+> **Event sequencing (MRA 2026).** The trial should run at an earlier MRA enduro — the
+> **Wakefield 300** at One Raceway (Round 2, 28 Feb – 1 Mar 2026) — with the **Shelley 300**
+> and other rounds as iteration windows, building to the **Sydney 300** at SMSP as the
+> flagship hybrid event. MRA's 2026 alignment with Motorsport Australia shortens the
+> sanctioning path (TBC-5).
+
 ## 10.3 Risk register
 
 | ID | Risk | Likelihood | Impact | Mitigation |

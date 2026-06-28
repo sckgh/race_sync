@@ -20,9 +20,15 @@ npx @marp-team/marp-cli MRA-RaceSync-pitch.md            # -> HTML
 
 ## Tailoring before you send it
 
-- Drop in MRA / event branding (logos, colours) via the `style:` block in the front-matter.
-- Add real numbers once known: target virtual-grid size, entry-fee/sponsorship figures, and
-  the pilot timeline.
+- **Brand colours:** the `style:` front-matter defines MRA brand variables at the top
+  (`--mra-red`, `--virtual`, `--gold`). `--mra-red` is a *placeholder* — drop in MRA's exact
+  hex from motorrace.com.au (and add the MRA logo to the title/close slides) once available.
+  The `--virtual` cyan is intentional: red = the real field, cyan = the virtual field.
+- **Trial framing:** the deck is built around trialling at the **Wakefield 300** (One
+  Raceway, 28 Feb – 1 Mar 2026), iterating through the **Shelley 300** and other rounds, and
+  showcasing at the **Sydney 300** — matching MRA's 2026 calendar (8 rounds, three 300 km
+  enduros). Adjust dates/events if the calendar shifts.
+- Add real numbers once known: target virtual-grid size, entry-fee/sponsorship figures.
 - The deck is deliberately honest about the one hard unknown (putting real cars *inside* the
   sim) and the guaranteed fallback — keep that slide; it builds credibility with an operator.
 

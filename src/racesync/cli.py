@@ -15,6 +15,7 @@ import math
 import sys
 
 from .bus import TOPIC_STATE, EventBus
+from .console import OperatorConsole
 from .fusion import Fusion
 from .health import HealthMonitor
 from .model import RaceState, TimingEvent, TimingEventKind
@@ -188,6 +189,40 @@ def _spike(args) -> int:
     return 0
 
 
+def _console(args) -> int:
+    """Launch the operator console. Interactive REPL, or a scripted demo by default."""
+    bus = EventBus()
+    engine = RaceStateEngine(bus=bus)
+    health = HealthMonitor(bus=bus, state_engine=engine)
+    scoring = ScoringService(state_engine=engine)
+    scoring.attach(bus)
+    scoring.register(Entry("1", "1", CarClass.REAL, "A. Fast", "B"))
+    scoring.register(Entry("2", "2", CarClass.REAL, "B. Steady", "C"))
+    scoring.register(Entry("V1", "V1", CarClass.VIRTUAL, "S. Remote"))
+    scoring.register(Entry("V2", "V2", CarClass.VIRTUAL, "T. Remote"))
+    adapter = LoopbackAdapter(); adapter.connect()
+
+    # Seed some classification data so the dashboard is not empty.
+    for cid, lap in (("1", 12), ("2", 11), ("V1", 11), ("V2", 10)):
+        engine.leader_car = "1"
+        scoring.on_timing_event(TimingEvent(TimingEventKind.LAP_COMPLETED, t=0.0,
+                                            car_id=cid, lap=lap, value=99.0 + lap * 0.01))
+
+    console = OperatorConsole(engine, health, scoring, adapter=adapter, clock=lambda: 0.0)
+
+    if args.interactive:
+        console.run()
+        return 0
+
+    # Scripted demonstration (no TTY needed): run a sequence and show the dashboard.
+    for cmd in ("arm", "green", "code60 on", "penalty V2 1 overtake under code60",
+                "code60 off", "chequer force"):
+        res = console.dispatch(cmd)
+        print(f"racesync> {cmd}\n  -> {res.message.splitlines()[0] if res.message else 'ok'}\n")
+    print(console.render())
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="racesync", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -212,6 +247,11 @@ def main(argv=None) -> int:
     p_spike.add_argument("--ac-host", default="127.0.0.1")
     p_spike.add_argument("--ac-port", type=int, default=9013)
     p_spike.set_defaults(func=_spike)
+
+    p_console = sub.add_parser("console", help="operator console (state, health, scoring)")
+    p_console.add_argument("--interactive", action="store_true",
+                           help="drop into the interactive command REPL")
+    p_console.set_defaults(func=_console)
 
     args = parser.parse_args(argv)
     return args.func(args)

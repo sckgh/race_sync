@@ -33,8 +33,9 @@ src/racesync/
   runner.py       # Pipeline: timestamp-ordered merge of sources -> fusion -> state -> bus
   recording.py    # FeedRecorder: capture raw feeds to JSONL (inverse of replay)
   health.py       # HealthMonitor (C7): feed freshness/rate, GO/DEGRADED/FAULT, alarms
+  scoring.py      # Scoring (C6): separate real/virtual classes, timed finish, penalties
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere; 46 tests)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 54 tests)
 examples/         # sample_feed.jsonl — a ready-to-replay recorded feed
 specs/            # Design documents
 ```

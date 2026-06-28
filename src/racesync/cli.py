@@ -20,6 +20,7 @@ from .health import HealthMonitor
 from .model import RaceState, TimingEvent, TimingEventKind
 from .recording import FeedRecorder
 from .runner import Pipeline
+from .scoring import CarClass, Entry, ScoringService, format_classification
 from .sources.base import RawFix
 from .sources.replay import ReplaySource
 from .state_engine import RaceStateEngine
@@ -44,52 +45,74 @@ def _oval_track(length_target: float = 3896.0, name: str = "demo-oval") -> Track
 
 
 def _demo(args) -> int:
+    """A short hybrid race through the whole stack: pipeline, state, scoring, health."""
     track = _oval_track()
     bus = EventBus()
     fusion = Fusion(track)
     engine = RaceStateEngine(bus=bus)
+    health = HealthMonitor(bus=bus, state_engine=engine)
+    health.register("synthetic", fresh=0.5, fault=2.0)
+    scoring = ScoringService(state_engine=engine)
+    scoring.attach(bus)
+    pipe = Pipeline(fusion, state_engine=engine, bus=bus, health=health)
 
-    transitions = []
-    bus.subscribe(TOPIC_STATE, lambda tr: transitions.append(tr))
+    # Field: two real cars (with MA divisions) and two virtual cars (own class).
+    scoring.register(Entry("1", "1", CarClass.REAL, "A. Fast", "B"))
+    scoring.register(Entry("2", "2", CarClass.REAL, "B. Steady", "C"))
+    scoring.register(Entry("V1", "V1", CarClass.VIRTUAL, "S. Remote"))
+    scoring.register(Entry("V2", "V2", CarClass.VIRTUAL, "T. Remote"))
+    speeds = {"1": 56.0, "2": 52.0, "V1": 55.0, "V2": 50.0}
 
-    # Two cars lapping the oval at different speeds; print a few sampled positions.
     print(f"track: {track.name}  length={track.length:.0f} m\n")
     engine.arm(t=0.0)
     engine.go_green(t=1.0)
     engine.leader_car = "1"
 
-    speeds = {"1": 55.0, "2": 50.0}  # m/s
     dt = 0.1
-    laps_done = {"1": 0, "2": 0}
+    laps_done = {c: 0 for c in speeds}
+    finished = False
     for step in range(int(args.seconds / dt)):
         t = 1.0 + step * dt
         for cid, v in speeds.items():
-            dist = v * t
-            s = (dist / track.length) % 1.0
+            s = (v * t / track.length) % 1.0
             x, y, _ = track.point_at(s)
-            est = fusion.on_fix(RawFix(car_id=cid, t=t, x=x, y=y, speed=v))
+            est = pipe.feed(RawFix(car_id=cid, t=t, x=x, y=y, speed=v), "synthetic")
             lap = est.lap_distance.lap
             if lap > laps_done[cid]:
                 laps_done[cid] = lap
-                engine.on_timing_event(TimingEvent(
-                    kind=TimingEventKind.LAP_COMPLETED, t=t, car_id=cid, lap=lap))
+                lap_time = track.length / v
+                pipe.feed(TimingEvent(TimingEventKind.LAP_COMPLETED, t=t, car_id=cid,
+                                      lap=lap, value=lap_time), "synthetic")
+
         if step % int(2.0 / dt) == 0:
             order = fusion.order()
-            lead = fusion.latest(order[0])
             print(f"t={t:6.1f}s  state={engine.state.value:11s}  "
-                  f"order={order}  leader_lap={engine.leader_lap}  "
-                  f"lead_s={lead.lap_distance.s:.3f}")
+                  f"order={order}  leader_lap={engine.leader_lap}")
 
-        # Demonstrate a Code 60 window mid-run.
         if abs(t - 5.0) < dt / 2:
             engine.set_code60(True, t=t)
-            print(f"  >> t={t:.1f}s SAFETY CAR -> CODE 60")
+            scoring.add_penalty("V2", laps=0, seconds=5.0, reason="overtake under Code 60")
+            print(f"  >> t={t:.1f}s SAFETY CAR -> CODE 60 (virtual field neutralised)")
         if abs(t - 9.0) < dt / 2:
             engine.set_code60(False, t=t)
             print(f"  >> t={t:.1f}s RESTART (green)")
 
-    print(f"\nstate transitions: {[(tr.from_state.value, tr.to_state.value) for tr in transitions]}")
-    print(f"neutralised for {engine.neutralised_seconds():.1f}s")
+        # Timed finish: when the real leader completes the (demo) distance of 2 laps,
+        # the virtual field is chequered wherever it is on track.
+        if not finished and engine.leader_lap >= 2:
+            engine.arm_finish(t=t, car_id="1")
+            engine.fire_chequer(t=t)
+            scoring.finalize(t=t)
+            finished = True
+            print(f"  >> t={t:.1f}s CHEQUERED FLAG (real leader completed distance)")
+            break
+
+    snap = health.tick(now=pipe.logical_now)
+    print(f"\nneutralised for {engine.neutralised_seconds():.1f}s   health={snap.overall.value}\n")
+    combined = scoring.combined()
+    for klass in (CarClass.REAL, CarClass.VIRTUAL):
+        print(format_classification(combined[klass]))
+        print()
     return 0
 
 

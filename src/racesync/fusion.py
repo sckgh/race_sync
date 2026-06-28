@@ -76,6 +76,11 @@ class Fusion:
             x, y = fix.x, fix.y
             proj = self.track.project(x, y)
         else:
+            if self.track.ref is None:
+                raise ValueError(
+                    f"geodetic fix for car {fix.car_id} but track {self.track.name!r} "
+                    "has no geodetic reference; load the track with a (lat, lon) ref"
+                )
             x, y = geodetic_to_local(fix.lat, fix.lon, self.track.ref[0], self.track.ref[1])
             proj = self.track.project(x, y)
 

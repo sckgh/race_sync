@@ -16,7 +16,10 @@ import sys
 
 from .bus import TOPIC_STATE, EventBus
 from .fusion import Fusion
+from .health import HealthMonitor
 from .model import RaceState, TimingEvent, TimingEventKind
+from .recording import FeedRecorder
+from .runner import Pipeline
 from .sources.base import RawFix
 from .sources.replay import ReplaySource
 from .state_engine import RaceStateEngine
@@ -91,25 +94,31 @@ def _demo(args) -> int:
 
 
 def _replay(args) -> int:
-    if args.track:
-        track = TrackFrame.from_geojson_line(args.track)
-    else:
-        track = _oval_track()
+    track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
+    bus = EventBus()
     fusion = Fusion(track)
-    engine = RaceStateEngine(clock=lambda: 0.0)
+    engine = RaceStateEngine(bus=bus)
+    health = HealthMonitor(bus=bus, state_engine=engine)
+    health.register("timing", fresh=120.0, fault=300.0)
     src = ReplaySource(args.feed)
-    n_fix = n_timing = 0
-    for event in src.stream():
-        if isinstance(event, RawFix):
-            fusion.on_fix(event)
-            n_fix += 1
-        elif isinstance(event, TimingEvent):
-            fusion.on_timing_event(event)
-            engine.on_timing_event(event)
-            n_timing += 1
-    print(f"replayed {n_fix} fixes, {n_timing} timing events from {src.name}")
+
+    recorder = FeedRecorder(args.record) if args.record else None
+    if recorder:
+        recorder.open()
+    try:
+        pipe = Pipeline(fusion, state_engine=engine, bus=bus, recorder=recorder, health=health)
+        counts = pipe.run([src])
+    finally:
+        if recorder:
+            recorder.close()
+
+    snap = health.tick(now=pipe.logical_now)
+    print(f"replayed {counts['fix']} fixes, {counts['timing']} timing events from {src.name}")
     print(f"final order: {fusion.order()}")
     print(f"state: {engine.state.value}  leader={engine.leader_car} lap={engine.leader_lap}")
+    print(f"health: {snap.overall.value}  alarms={snap.alarms or 'none'}")
+    if recorder:
+        print(f"recorded {recorder.count} raw events -> {args.record}")
     return 0
 
 
@@ -124,6 +133,7 @@ def main(argv=None) -> int:
     p_replay = sub.add_parser("replay", help="replay a recorded JSONL feed")
     p_replay.add_argument("feed", help="path to a JSONL feed file")
     p_replay.add_argument("--track", help="GeoJSON LineString centreline (optional)")
+    p_replay.add_argument("--record", help="capture raw events to a JSONL file (parity check)")
     p_replay.set_defaults(func=_replay)
 
     args = parser.parse_args(argv)

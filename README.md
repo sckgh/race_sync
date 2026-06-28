@@ -30,9 +30,21 @@ src/racesync/
   sources/        # Pluggable inputs (PositionSource): NMEA GPS, replay, MyLaps stub
   fusion.py       # Fuse sources + dead-reckon into one Position Model stream
   state_engine.py # Shared race state machine (GREEN / CODE 60 / timed finish)
+  runner.py       # Pipeline: timestamp-ordered merge of sources -> fusion -> state -> bus
+  recording.py    # FeedRecorder: capture raw feeds to JSONL (inverse of replay)
+  health.py       # HealthMonitor (C7): feed freshness/rate, GO/DEGRADED/FAULT, alarms
   cli.py          # Dev entry point (replay a feed through the pipeline)
-tests/            # pytest suite (stdlib-only core, runs anywhere)
+tests/            # pytest suite (stdlib-only core, runs anywhere; 46 tests)
+examples/         # sample_feed.jsonl — a ready-to-replay recorded feed
 specs/            # Design documents
+```
+
+## Try it
+
+```bash
+python -m racesync.cli demo                       # synthetic feed through the pipeline
+python -m racesync.cli replay examples/sample_feed.jsonl   # replay a recorded feed
+python -m racesync.cli replay examples/sample_feed.jsonl --record out.jsonl  # capture parity
 ```
 
 ## Quick start (dev)

@@ -27,7 +27,16 @@ from .model import geodetic_to_local
 
 @dataclass(frozen=True)
 class Projection:
-    """Result of map-matching a point onto the centreline."""
+    """Result of map-matching a point onto the centreline.
+
+    Attributes:
+        s: Fraction [0, 1) around the lap.
+        lateral: Signed metres from centreline (+left of travel direction).
+        x: Snapped point x-coordinate on the centreline.
+        y: Snapped point y-coordinate on the centreline.
+        heading: Centreline direction at the snapped point (radians).
+        distance: Absolute distance from the queried point to the centreline (m).
+    """
 
     s: float          # fraction [0, 1) around the lap
     lateral: float    # signed metres from centreline (+left of travel direction)
@@ -38,7 +47,20 @@ class Projection:
 
 
 def _seg_closest(px, py, ax, ay, bx, by):
-    """Closest point on segment AB to P; returns (t, qx, qy) with t in [0, 1]."""
+    """Find the closest point on segment AB to point P.
+
+    Args:
+        px: Query point x-coordinate.
+        py: Query point y-coordinate.
+        ax: Segment start x-coordinate.
+        ay: Segment start y-coordinate.
+        bx: Segment end x-coordinate.
+        by: Segment end y-coordinate.
+
+    Returns:
+        A tuple ``(t, qx, qy)`` where ``t`` in [0, 1] is the position along AB and
+        ``(qx, qy)`` is the closest point.
+    """
     abx, aby = bx - ax, by - ay
     seg_len2 = abx * abx + aby * aby
     if seg_len2 == 0.0:
@@ -51,15 +73,11 @@ def _seg_closest(px, py, ax, ay, bx, by):
 class TrackFrame:
     """A closed-loop centreline with along-track projection and interpolation.
 
-    Parameters
-    ----------
-    centreline:
-        Ordered (x, y) points in metres. Treated as a closed loop (last point joins
-        back to the first). Must have at least 3 points.
-    ref:
-        Optional (lat, lon) reference for projecting geodetic inputs to this plane.
-    name:
-        Human label (e.g. "SMSP Gardner GP").
+    Args:
+        centreline: Ordered (x, y) points in metres. Treated as a closed loop (last
+            point joins back to the first). Must have at least 3 points.
+        ref: Optional (lat, lon) reference for projecting geodetic inputs to this plane.
+        name: Human label (e.g. "SMSP Gardner GP").
     """
 
     def __init__(self, centreline, ref=None, name="unnamed"):
@@ -86,6 +104,13 @@ class TrackFrame:
 
         The first coordinate is used as the projection reference. Useful once a surveyed
         SMSP centreline is available (specs/02 TBC-1).
+
+        Args:
+            path: Path to the GeoJSON document to load.
+            name: Optional track name; defaults to the file stem.
+
+        Returns:
+            A ``TrackFrame`` built from the projected centreline.
         """
         data = json.loads(Path(path).read_text())
         coords = _extract_linestring(data)
@@ -104,7 +129,15 @@ class TrackFrame:
     # -- conversions -------------------------------------------------------- #
 
     def project(self, x: float, y: float) -> Projection:
-        """Map-match a track-plane point to the nearest point on the centreline."""
+        """Map-match a track-plane point to the nearest point on the centreline.
+
+        Args:
+            x: Track-plane x-coordinate in metres.
+            y: Track-plane y-coordinate in metres.
+
+        Returns:
+            The projection of the point onto the centreline.
+        """
         best = None
         n = len(self._pts)
         for i in range(n):
@@ -124,13 +157,33 @@ class TrackFrame:
         return Projection(s=s, lateral=lateral, x=qx, y=qy, heading=heading, distance=d)
 
     def project_geodetic(self, lat: float, lon: float) -> Projection:
+        """Project a geodetic point onto the centreline via the track plane.
+
+        Args:
+            lat: Latitude of the point in decimal degrees.
+            lon: Longitude of the point in decimal degrees.
+
+        Returns:
+            The projection of the point onto the centreline.
+
+        Raises:
+            ValueError: If the track has no geodetic reference.
+        """
         if self.ref is None:
             raise ValueError("track has no geodetic reference; cannot project lat/lon")
         x, y = geodetic_to_local(lat, lon, self.ref[0], self.ref[1])
         return self.project(x, y)
 
     def point_at(self, s: float) -> tuple[float, float, float]:
-        """Interpolate (x, y, heading) at along-track fraction ``s`` in [0, 1)."""
+        """Interpolate position and heading at an along-track fraction.
+
+        Args:
+            s: Along-track fraction in [0, 1); values outside are wrapped.
+
+        Returns:
+            A tuple ``(x, y, heading)`` of the interpolated point in metres and the
+            centreline heading in radians.
+        """
         s = s % 1.0
         target = s * self.length
         n = len(self._pts)
@@ -149,12 +202,31 @@ class TrackFrame:
         return ax, ay, math.atan2(by - ay, bx - ax)
 
     def forward_gap(self, s_from: float, s_to: float) -> float:
-        """Forward fraction of a lap from ``s_from`` to ``s_to`` (handles wrap)."""
+        """Compute the forward fraction of a lap between two along-track fractions.
+
+        Args:
+            s_from: Starting along-track fraction.
+            s_to: Target along-track fraction.
+
+        Returns:
+            The forward distance from ``s_from`` to ``s_to`` as a lap fraction,
+            wrapping across the start/finish seam.
+        """
         return (s_to - s_from) % 1.0
 
 
 def _extract_linestring(geojson):
-    """Pull the first LineString coordinate list out of a GeoJSON document."""
+    """Pull the first LineString coordinate list out of a GeoJSON document.
+
+    Args:
+        geojson: A parsed GeoJSON object (LineString, Feature, or FeatureCollection).
+
+    Returns:
+        The coordinate list of the first LineString found.
+
+    Raises:
+        ValueError: If no LineString is present in the document.
+    """
     if geojson.get("type") == "LineString":
         return geojson["coordinates"]
     if geojson.get("type") == "Feature":

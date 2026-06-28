@@ -30,6 +30,13 @@ def encode_phantom_packet(state: PhantomState, seq: int = 0) -> bytes:
     The concrete on-wire schema is provisional (a JSON line keyed by car id) and will be
     finalised with the companion during the spike. It is kept pure and small so it can be
     unit-tested and swapped without touching the adapter logic.
+
+    Args:
+        state: The phantom state to encode.
+        seq: Monotonic packet sequence number.
+
+    Returns:
+        A newline-terminated UTF-8 JSON payload.
     """
     payload = {
         "v": 1,
@@ -46,17 +53,30 @@ def encode_phantom_packet(state: PhantomState, seq: int = 0) -> bytes:
 
 
 def encode_global_packet(state: GlobalSimState) -> bytes:
+    """Encode a global field-wide state as a UDP payload for the AC companion plugin.
+
+    Args:
+        state: The global sim state to encode.
+
+    Returns:
+        A newline-terminated UTF-8 JSON payload.
+    """
     return (json.dumps({"v": 1, "global": {"code60": state.code60,
                                             "chequered": state.chequered}},
                        separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def decode_phantom_packet(data: bytes):
-    """Decode a phantom packet -> (PhantomState, seq), or None. Sim-side counterpart.
+    """Decode a phantom packet into a phantom state, the sim-side counterpart to encoding.
 
     This is the reference decoder for the AC companion's network layer; the companion
-    reimplements the same tiny schema in AC's (older) Python. Returns ``None`` for global
-    packets or malformed input.
+    reimplements the same tiny schema in AC's (older) Python.
+
+    Args:
+        data: The raw UDP payload to decode.
+
+    Returns:
+        A ``(PhantomState, seq)`` tuple, or None for global packets or malformed input.
     """
     try:
         obj = json.loads(data.decode("utf-8", errors="ignore").strip() or "{}")
@@ -75,7 +95,14 @@ def decode_phantom_packet(data: bytes):
 
 
 def decode_global_packet(data: bytes):
-    """Decode a global-state packet -> GlobalSimState, or None."""
+    """Decode a global-state packet into a GlobalSimState.
+
+    Args:
+        data: The raw UDP payload to decode.
+
+    Returns:
+        A GlobalSimState, or None if the payload is not a valid global packet.
+    """
     try:
         obj = json.loads(data.decode("utf-8", errors="ignore").strip() or "{}")
     except json.JSONDecodeError:
@@ -90,13 +117,12 @@ def decode_global_packet(data: bytes):
 class AssettoCorsaAdapter(SimInjectionAdapter):
     """Streams phantom states to an AC companion plugin over UDP.
 
-    Parameters
-    ----------
-    host, port:
-        Where the AC companion plugin listens.
-    sender:
-        Optional injectable send-callable ``(bytes) -> None`` (used by tests to capture
-        packets without opening a socket). When omitted, a real UDP socket is used.
+    Args:
+        host: Host where the AC companion plugin listens.
+        port: Port where the AC companion plugin listens.
+        sender: Optional injectable send-callable ``(bytes) -> None`` (used by tests to
+            capture packets without opening a socket). When omitted, a real UDP socket is
+            used.
     """
 
     name = "assetto-corsa"

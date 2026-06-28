@@ -21,6 +21,12 @@ class PositionSourceKind(str, enum.Enum):
     """Where a position estimate came from / how it was derived.
 
     Ordered loosely best->worst so consumers can prefer higher-quality sources.
+
+    Attributes:
+        GPS: Continuous GNSS (ideally RTK-fixed).
+        FUSED: GPS re-anchored to a timing crossing.
+        TIMING_INTERP: Interpolated between timing loops.
+        DEAD_RECKONED: Extrapolated through a data gap.
     """
 
     GPS = "gps"                     # continuous GNSS (ideally RTK-fixed)
@@ -33,10 +39,14 @@ class PositionSourceKind(str, enum.Enum):
 class LapDistance:
     """Position expressed in the track frame: which lap, and how far around it.
 
-    ``s`` is the fraction [0, 1) of the way around the lap, measured along the track
-    centreline. ``total`` is a monotonic progress measure (``lap + s``) that is safe to
-    compare/sort across cars and is the natural key for ordering and the timed finish
-    (specs/06, specs/08).
+    ``total`` is a monotonic progress measure (``lap + s``) that is safe to compare/sort
+    across cars and is the natural key for ordering and the timed finish (specs/06,
+    specs/08).
+
+    Attributes:
+        lap: The lap number (>= 0).
+        s: Fraction [0, 1) of the way around the lap, measured along the track
+            centreline.
     """
 
     lap: int
@@ -57,9 +67,19 @@ class LapDistance:
 class PositionEstimate:
     """One estimate of where a car is, at time ``t`` (seconds, aligned clock).
 
-    ``x``/``y`` are track-plane metres (for injection); ``lap_distance`` is the
-    along-track representation (for ordering/interpolation). ``quality`` is a 0..1
-    confidence; ``age`` (seconds) lets consumers decay trust in stale estimates.
+    Attributes:
+        car_id: Identifier of the car this estimate is for.
+        t: Time of the estimate in seconds on the aligned clock.
+        x: Track-plane east coordinate in metres (for injection).
+        y: Track-plane north coordinate in metres (for injection).
+        lap_distance: Along-track representation (for ordering/interpolation).
+        source: How the estimate was derived.
+        speed: Speed in m/s, measured (GPS) or estimated.
+        heading: Heading in radians, 0 = +x axis, CCW positive.
+        lat: Original geodetic latitude, when from GPS.
+        lon: Original geodetic longitude, when from GPS.
+        quality: A 0..1 confidence in the estimate.
+        age: Staleness in seconds; lets consumers decay trust in stale estimates.
     """
 
     car_id: str
@@ -81,6 +101,13 @@ class PositionEstimate:
         Quality halves roughly every second of staleness — a deliberately gentle decay
         so a brief gap does not crater confidence but a long one clearly does
         (specs/04 §4.3: plausible-and-stable beats precise-but-jumpy).
+
+        Args:
+            now: Current time in seconds on the aligned clock.
+
+        Returns:
+            A new estimate with ``age`` set to the staleness and ``quality`` decayed
+            accordingly.
         """
         age = max(0.0, now - self.t)
         decay = 0.5 ** age
@@ -97,6 +124,16 @@ class PositionEstimate:
 # --------------------------------------------------------------------------- #
 
 class TimingEventKind(str, enum.Enum):
+    """Kinds of authoritative timing events.
+
+    Attributes:
+        PASSING: Transponder seen at a loop.
+        SECTOR: Sector time recorded.
+        LAP_COMPLETED: Car completed a lap.
+        LEADER_CHANGED: The race leader changed.
+        RACE_COMPLETED: Leader completed full race distance.
+    """
+
     PASSING = "passing"                # transponder seen at a loop
     SECTOR = "sector"                  # sector time recorded
     LAP_COMPLETED = "lap_completed"    # car completed a lap
@@ -108,9 +145,17 @@ class TimingEventKind(str, enum.Enum):
 class TimingEvent:
     """An authoritative timing event (from MyLaps/official timing).
 
-    ``lap`` is the lap number the event pertains to; ``value`` carries a lap/sector
-    time in seconds where relevant. RaceSync treats these as authoritative for laps,
-    order and the finish trigger (specs/01 A2, specs/08).
+    RaceSync treats these as authoritative for laps, order and the finish trigger
+    (specs/01 A2, specs/08).
+
+    Attributes:
+        kind: The kind of timing event.
+        t: Time of the event in seconds.
+        car_id: Car the event pertains to, when applicable.
+        lap: Lap number the event pertains to.
+        sector: Sector number the event pertains to, when applicable.
+        value: Lap/sector time in seconds where relevant.
+        meta: Additional event metadata.
     """
 
     kind: TimingEventKind
@@ -127,6 +172,16 @@ class TimingEvent:
 # --------------------------------------------------------------------------- #
 
 class RaceState(str, enum.Enum):
+    """The shared race state (specs/06).
+
+    Attributes:
+        PRE_RACE: Before the race has started.
+        FORMATION: Formation lap in progress.
+        GREEN: Racing under green-flag conditions.
+        NEUTRALISED: Real Safety Car -> virtual Code 60.
+        CHEQUERED: The race has finished.
+    """
+
     PRE_RACE = "pre_race"
     FORMATION = "formation"
     GREEN = "green"
@@ -136,7 +191,16 @@ class RaceState(str, enum.Enum):
 
 @dataclass(frozen=True)
 class StateTransition:
-    """A change in shared race state, with provenance for the audit log (specs/06)."""
+    """A change in shared race state, with provenance for the audit log (specs/06).
+
+    Attributes:
+        from_state: The state being left.
+        to_state: The state being entered.
+        t: Time of the transition in seconds.
+        source: Origin of the change ("operator" | "timing" | "system").
+        reason: Human-readable reason for the transition.
+        meta: Additional transition metadata.
+    """
 
     from_state: RaceState
     to_state: RaceState
@@ -157,7 +221,16 @@ def geodetic_to_local(lat: float, lon: float, ref_lat: float, ref_lon: float) ->
     """Equirectangular projection of (lat, lon) to local metres about a reference.
 
     Accurate to well under a metre over a few-km circuit, which is all the track frame
-    needs (specs/04 §4.2). Returns (east, north) in metres.
+    needs (specs/04 §4.2).
+
+    Args:
+        lat: Latitude of the point in decimal degrees.
+        lon: Longitude of the point in decimal degrees.
+        ref_lat: Reference latitude in decimal degrees.
+        ref_lon: Reference longitude in decimal degrees.
+
+    Returns:
+        The (east, north) offset from the reference in metres.
     """
     lat_r = math.radians(lat)
     ref_lat_r = math.radians(ref_lat)
@@ -167,7 +240,17 @@ def geodetic_to_local(lat: float, lon: float, ref_lat: float, ref_lon: float) ->
 
 
 def local_to_geodetic(east: float, north: float, ref_lat: float, ref_lon: float) -> tuple[float, float]:
-    """Inverse of :func:`geodetic_to_local`: local metres -> (lat, lon) decimal degrees."""
+    """Inverse of :func:`geodetic_to_local`: local metres -> (lat, lon) decimal degrees.
+
+    Args:
+        east: East offset from the reference in metres.
+        north: North offset from the reference in metres.
+        ref_lat: Reference latitude in decimal degrees.
+        ref_lon: Reference longitude in decimal degrees.
+
+    Returns:
+        The (lat, lon) of the point in decimal degrees.
+    """
     lat = ref_lat + math.degrees(north / EARTH_RADIUS_M)
     mean_lat_r = (math.radians(lat) + math.radians(ref_lat)) / 2.0
     lon = ref_lon + math.degrees(east / (EARTH_RADIUS_M * math.cos(mean_lat_r)))

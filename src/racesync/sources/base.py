@@ -20,9 +20,22 @@ from ..model import TimingEvent
 class RawFix:
     """A raw position observation from a position source, before map-matching.
 
-    Either (lat, lon) or (x, y) must be supplied. ``speed`` is m/s and ``heading`` is
-    radians where the hardware provides them. ``quality`` lets a source signal fix type
-    (e.g. RTK-fixed vs float vs autonomous) as 0..1.
+    Either (lat, lon) or (x, y) must be supplied.
+
+    Attributes:
+        car_id: Identifier of the car this fix belongs to.
+        t: Observation timestamp in seconds on the aligned clock.
+        lat: Latitude in decimal degrees, if a geodetic fix is provided.
+        lon: Longitude in decimal degrees, if a geodetic fix is provided.
+        x: Plane x-coordinate, if a projected fix is provided.
+        y: Plane y-coordinate, if a projected fix is provided.
+        speed: Speed in m/s where the hardware provides it.
+        heading: Heading in radians where the hardware provides it.
+        quality: Fix type signalled as 0..1 (e.g. RTK-fixed vs float vs autonomous).
+        meta: Arbitrary source-specific metadata.
+
+    Raises:
+        ValueError: If neither (lat, lon) nor (x, y) is supplied.
     """
 
     car_id: str
@@ -45,7 +58,14 @@ class RawFix:
 
 @dataclass
 class SourceHealth:
-    """Liveness/quality snapshot a source exposes to the Health Monitor (specs/09)."""
+    """Liveness/quality snapshot a source exposes to the Health Monitor (specs/09).
+
+    Attributes:
+        connected: Whether the source is currently producing data.
+        last_packet_age: Seconds since the last packet was received.
+        rate_hz: Observed packet rate in Hz.
+        drop_rate: Fraction of expected packets that were dropped.
+    """
 
     connected: bool = False
     last_packet_age: float = float("inf")
@@ -66,7 +86,12 @@ class PositionSource(Protocol):
     name: str
 
     def stream(self) -> Iterator[RawFix | TimingEvent]:
-        """Yield raw fixes / timing events as they arrive."""
+        """Yield raw fixes and timing events as they arrive.
+
+        Yields:
+            ``RawFix`` and/or ``TimingEvent`` objects; the stream may be finite
+            (replay/file) or unbounded (live socket).
+        """
         ...
 
     def health(self) -> SourceHealth:

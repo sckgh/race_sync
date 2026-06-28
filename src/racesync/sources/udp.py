@@ -25,7 +25,15 @@ from .gps_nmea import NmeaParser
 
 
 def encode_telemetry_packet(fix: RawFix, seq: int = 0) -> bytes:
-    """Encode a RawFix as the compact uplink packet a car would send (car side)."""
+    """Encode a RawFix as the compact uplink packet a car would send (car side).
+
+    Args:
+        fix: The RawFix to encode.
+        seq: Sequence number embedded in the packet.
+
+    Returns:
+        The newline-terminated UTF-8 encoded JSON packet bytes.
+    """
     payload = {"v": 1, "seq": seq, "car": fix.car_id, "t": round(fix.t, 4)}
     for src, dst in (("lat", "lat"), ("lon", "lon"), ("x", "x"), ("y", "y")):
         v = getattr(fix, src)
@@ -41,7 +49,15 @@ def encode_telemetry_packet(fix: RawFix, seq: int = 0) -> bytes:
 
 def decode_telemetry_packet(data: bytes,
                             nmea_parser: Optional[NmeaParser] = None) -> Optional[RawFix]:
-    """Decode an uplink payload (compact JSON packet or raw NMEA) into a RawFix."""
+    """Decode an uplink payload (compact JSON packet or raw NMEA) into a RawFix.
+
+    Args:
+        data: The raw uplink payload bytes.
+        nmea_parser: Parser used for raw NMEA payloads; required to decode ``$`` sentences.
+
+    Returns:
+        The decoded RawFix, or None for empty, malformed or unrecognised payloads.
+    """
     text = data.decode("utf-8", errors="ignore").strip()
     if not text:
         return None
@@ -68,9 +84,14 @@ def decode_telemetry_packet(data: bytes,
 class UdpTelemetrySource:
     """Position uplink source over UDP (or a test iterable of payloads).
 
-    Construct with ``packets=`` (an iterable of ``bytes``) for tests/replay, or use
-    :meth:`listen` to bind a real socket. ``nmea_car_id`` associates a car id with raw NMEA
-    payloads on this listener (ignored for JSON packets, which carry their own id).
+    Construct with ``packets`` for tests/replay, or use :meth:`listen` to bind a real
+    socket.
+
+    Args:
+        packets: Iterable of payload ``bytes`` for tests/replay; omit to use a socket.
+        nmea_car_id: Car id associated with raw NMEA payloads on this listener (ignored for
+            JSON packets, which carry their own id).
+        name: Source name used by the Health Monitor.
     """
 
     def __init__(self, packets: Optional[Iterable[bytes]] = None,
@@ -85,6 +106,17 @@ class UdpTelemetrySource:
     @classmethod
     def listen(cls, host: str = "0.0.0.0", port: int = 9101,
                nmea_car_id: Optional[str] = None, bufsize: int = 2048) -> "UdpTelemetrySource":
+        """Create a source bound to a real UDP socket.
+
+        Args:
+            host: Interface address to bind to.
+            port: UDP port to bind to.
+            nmea_car_id: Car id associated with raw NMEA payloads on this listener.
+            bufsize: Receive buffer size in bytes per datagram.
+
+        Returns:
+            A UdpTelemetrySource reading datagrams from the bound socket.
+        """
         src = cls(nmea_car_id=nmea_car_id)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((host, port))
@@ -93,6 +125,15 @@ class UdpTelemetrySource:
         return src
 
     def _iter_payloads(self) -> Iterator[bytes]:
+        """Yield raw payloads from the test iterable or the bound socket.
+
+        Yields:
+            Payload ``bytes`` from ``packets`` when provided, otherwise datagrams read
+            from the socket indefinitely.
+
+        Raises:
+            AssertionError: If neither packets nor a socket is configured.
+        """
         if self._packets is not None:
             yield from self._packets
             return
@@ -102,6 +143,11 @@ class UdpTelemetrySource:
             yield data
 
     def stream(self) -> Iterator[RawFix]:
+        """Decode each incoming payload into a RawFix.
+
+        Yields:
+            Each successfully decoded RawFix; undecodable payloads are skipped.
+        """
         for data in self._iter_payloads():
             fix = decode_telemetry_packet(data, self._nmea)
             if fix is not None:
@@ -110,5 +156,6 @@ class UdpTelemetrySource:
         self._done = True
 
     def health(self) -> SourceHealth:
+        """Report a liveness/quality snapshot for this source."""
         return SourceHealth(connected=not self._done,
                             last_packet_age=0.0 if self._count else float("inf"))

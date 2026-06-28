@@ -25,6 +25,14 @@ class Status(str, Enum):
     FAULT = "fault"
 
     def worse_of(self, other: "Status") -> "Status":
+        """Return the more severe of this status and ``other``.
+
+        Args:
+            other: Status to compare against.
+
+        Returns:
+            Whichever status ranks worse (FAULT > DEGRADED > GO).
+        """
         order = [Status.GO, Status.DEGRADED, Status.FAULT]
         return self if order.index(self) >= order.index(other) else other
 
@@ -35,6 +43,12 @@ class SourceConfig:
 
     Defaults suit a high-rate position feed. Sparse feeds (e.g. lap timing, ~90 s apart)
     should be registered with much larger thresholds so they are not perpetually FAULT.
+
+    Attributes:
+        fresh: Maximum age (seconds) for GO status.
+        fault: Age (seconds) above which the source is FAULT; between ``fresh`` and
+            ``fault`` is DEGRADED.
+        critical: Whether the source is safety-critical and affects overall status.
     """
 
     fresh: float = 0.5    # <= fresh -> GO
@@ -44,6 +58,16 @@ class SourceConfig:
 
 @dataclass
 class SourceHealth:
+    """Health summary for a single source.
+
+    Attributes:
+        name: Source name.
+        count: Number of events observed.
+        rate_hz: Observed throughput in events per second.
+        age: Seconds since the last event.
+        status: Computed status for the source.
+    """
+
     name: str
     count: int
     rate_hz: float
@@ -53,6 +77,15 @@ class SourceHealth:
 
 @dataclass
 class HealthSnapshot:
+    """A point-in-time view of overall and per-source health.
+
+    Attributes:
+        t: Time the snapshot was taken.
+        overall: Worst status across critical sources.
+        sources: Per-source health, keyed by source name.
+        alarms: Human-readable alarm strings raised by this snapshot.
+    """
+
     t: float
     overall: Status
     sources: dict[str, SourceHealth] = field(default_factory=dict)
@@ -61,6 +94,14 @@ class HealthSnapshot:
 
 @dataclass
 class _Stat:
+    """Running observation stats for a source.
+
+    Attributes:
+        count: Number of events observed.
+        first_t: Timestamp of the first event, or ``None`` if none seen.
+        last_t: Timestamp of the most recent event, or ``None`` if none seen.
+    """
+
     count: int = 0
     first_t: Optional[float] = None
     last_t: Optional[float] = None
@@ -77,10 +118,24 @@ class HealthMonitor:
 
     def register(self, name: str, fresh: float = 0.5, fault: float = 2.0,
                  critical: bool = True) -> None:
-        """Configure thresholds for a source (call before/while observing it)."""
+        """Configure thresholds for a source (call before/while observing it).
+
+        Args:
+            name: Source name to configure.
+            fresh: Maximum age (seconds) for GO status.
+            fault: Age (seconds) above which the source is FAULT.
+            critical: Whether the source is safety-critical.
+        """
         self._cfg[name] = SourceConfig(fresh=fresh, fault=fault, critical=critical)
 
     def observe(self, source_name: str, event, now: float) -> None:
+        """Record an observed event for a source.
+
+        Args:
+            source_name: Source the event came from.
+            event: The observed event; its ``t`` updates freshness stats.
+            now: Current time (unused for stat tracking but kept for the interface).
+        """
         st = self._stat.setdefault(source_name, _Stat())
         st.count += 1
         if st.first_t is None:
@@ -93,6 +148,15 @@ class HealthMonitor:
         return self._cfg.get(name, self._default)
 
     def snapshot(self, now: float) -> HealthSnapshot:
+        """Compute the current health snapshot across all observed sources.
+
+        Args:
+            now: Current time used to compute source ages.
+
+        Returns:
+            A ``HealthSnapshot`` with per-source health, overall status, and alarms,
+            including a stale-data alarm if the field is racing on a faulted feed.
+        """
         sources: dict[str, SourceHealth] = {}
         overall = Status.GO
         alarms: list[str] = []
@@ -126,7 +190,14 @@ class HealthMonitor:
         return HealthSnapshot(t=now, overall=overall, sources=sources, alarms=alarms)
 
     def tick(self, now: float) -> HealthSnapshot:
-        """Compute a snapshot and publish it on the bus."""
+        """Compute a snapshot and publish it on the bus.
+
+        Args:
+            now: Current time used to compute source ages.
+
+        Returns:
+            The computed ``HealthSnapshot`` (also published if a bus is configured).
+        """
         snap = self.snapshot(now)
         if self.bus is not None:
             self.bus.publish(TOPIC_HEALTH, snap)

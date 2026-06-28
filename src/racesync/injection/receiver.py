@@ -28,7 +28,18 @@ class PhantomReceiver:
         self.dropped_stale = 0
 
     def ingest(self, data: bytes):
-        """Process one received packet. Returns the applied state, or None if dropped."""
+        """Process one received packet and update world state.
+
+        Phantom packets older than the last seen sequence for their car are dropped as
+        stale; global packets replace the current global state.
+
+        Args:
+            data: The raw UDP packet to process.
+
+        Returns:
+            The applied PhantomState, the applied GlobalSimState, or None if the packet was
+            dropped or unrecognised.
+        """
         decoded = decode_phantom_packet(data)
         if decoded is not None:
             state, seq = decoded

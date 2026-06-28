@@ -23,6 +23,15 @@ from .base import RawFix, SourceHealth
 
 
 class ReplaySource:
+    """Replay recorded fixes/timing events from a JSON Lines file.
+
+    Records are emitted in file order, which should also be time order.
+
+    Args:
+        path: Path to the JSON Lines file to replay.
+        name: Optional source name; defaults to ``replay:<filename>``.
+    """
+
     def __init__(self, path: str | Path, name: str | None = None):
         self.path = Path(path)
         self.name = name or f"replay:{self.path.name}"
@@ -31,7 +40,15 @@ class ReplaySource:
 
     @classmethod
     def from_records(cls, records: Iterable[dict], tmp_path: str | Path) -> "ReplaySource":
-        """Write ``records`` to a JSONL file and return a source over it (test helper)."""
+        """Write records to a JSONL file and return a source over it (test helper).
+
+        Args:
+            records: Iterable of record dicts to serialise, one per line.
+            tmp_path: Destination path for the JSONL file.
+
+        Returns:
+            A ReplaySource reading the freshly written file.
+        """
         p = Path(tmp_path)
         with p.open("w") as fh:
             for rec in records:
@@ -39,6 +56,13 @@ class ReplaySource:
         return cls(p)
 
     def stream(self) -> Iterator[RawFix | TimingEvent]:
+        """Read the file and emit each record as an event.
+
+        Blank lines and lines starting with ``#`` are skipped.
+
+        Yields:
+            A RawFix or TimingEvent for each decodable record, in file order.
+        """
         with self.path.open() as fh:
             for line in fh:
                 line = line.strip()
@@ -52,10 +76,20 @@ class ReplaySource:
         self._done = True
 
     def health(self) -> SourceHealth:
+        """Report a liveness/quality snapshot for this source."""
         return SourceHealth(connected=not self._done, last_packet_age=0.0)
 
 
 def _record_to_event(rec: dict) -> RawFix | TimingEvent | None:
+    """Convert a parsed JSONL record into a RawFix or TimingEvent.
+
+    Args:
+        rec: The decoded record dict; its ``type`` selects the event kind.
+
+    Returns:
+        A RawFix for ``fix`` records, a TimingEvent for ``timing`` records, or None for
+        any other type.
+    """
     rtype = rec.get("type")
     if rtype == "fix":
         return RawFix(

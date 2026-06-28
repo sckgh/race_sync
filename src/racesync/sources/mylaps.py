@@ -29,6 +29,9 @@ class MyLapsX2Source:
     :meth:`feed_race_completed` and drained by :meth:`stream`. A live implementation
     would instead connect to the X2 server and translate its messages into the same
     events.
+
+    Args:
+        name: Source name used by the Health Monitor.
     """
 
     def __init__(self, name: str = "mylaps-x2"):
@@ -40,39 +43,76 @@ class MyLapsX2Source:
     # -- feed API (test/replay; replaced by a live connection later) -------- #
 
     def feed_passing(self, car_id: str, t: float, loop: Optional[str] = None) -> None:
+        """Queue a transponder passing (loop crossing) event.
+
+        Args:
+            car_id: Identifier of the car that crossed the loop.
+            t: Crossing timestamp in seconds.
+            loop: Optional loop/decoder identifier recorded in the event metadata.
+        """
         self._queue.append(TimingEvent(
             kind=TimingEventKind.PASSING, t=t, car_id=str(car_id),
             meta={"loop": loop} if loop else {},
         ))
 
     def feed_lap(self, car_id: str, t: float, lap: int, lap_time: Optional[float] = None) -> None:
+        """Queue a lap-completed event.
+
+        Args:
+            car_id: Identifier of the car that completed the lap.
+            t: Lap completion timestamp in seconds.
+            lap: The completed lap number.
+            lap_time: Optional lap time in seconds, recorded as the event value.
+        """
         self._queue.append(TimingEvent(
             kind=TimingEventKind.LAP_COMPLETED, t=t, car_id=str(car_id),
             lap=lap, value=lap_time,
         ))
 
     def feed_leader_changed(self, car_id: str, t: float, lap: int) -> None:
+        """Queue a leader-changed event.
+
+        Args:
+            car_id: Identifier of the car that became the new leader.
+            t: Timestamp of the leader change in seconds.
+            lap: Lap number at which the change occurred.
+        """
         self._queue.append(TimingEvent(
             kind=TimingEventKind.LEADER_CHANGED, t=t, car_id=str(car_id), lap=lap,
         ))
 
     def feed_race_completed(self, car_id: str, t: float, lap: int) -> None:
-        """The leader has completed the full race distance (timed-finish trigger)."""
+        """Queue a race-completed event (the leader has run the full race distance).
+
+        This is the timed-finish trigger.
+
+        Args:
+            car_id: Identifier of the leading car that completed the race distance.
+            t: Timestamp of the trigger in seconds.
+            lap: Lap number on which the race distance was completed.
+        """
         self._queue.append(TimingEvent(
             kind=TimingEventKind.RACE_COMPLETED, t=t, car_id=str(car_id), lap=lap,
         ))
 
     def close(self) -> None:
+        """Mark the source as closed."""
         self._closed = True
 
     # -- PositionSource protocol ------------------------------------------- #
 
     def stream(self) -> Iterator[TimingEvent]:
+        """Drain the queued timing events.
+
+        Yields:
+            Queued TimingEvent objects in FIFO order until the queue is empty.
+        """
         while self._queue:
             self._seen += 1
             yield self._queue.popleft()
 
     def health(self) -> SourceHealth:
+        """Report a liveness/quality snapshot for this source."""
         return SourceHealth(
             connected=not self._closed,
             last_packet_age=0.0 if self._seen else float("inf"),

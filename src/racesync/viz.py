@@ -32,8 +32,16 @@ def track_svg(track: TrackFrame, cars: Iterable, width: int = 720,
               title: str = "", banner: str = "") -> str:
     """Render the track + car markers to an SVG string.
 
-    ``cars`` is any iterable of objects with ``car_id``, ``x``, ``y`` (and optional
-    ``source``/``quality`` for colouring).
+    Args:
+        track: Track frame providing the centreline points.
+        cars: Iterable of objects with ``car_id``, ``x``, ``y`` (and optional
+            ``source``/``quality`` for colouring).
+        width: SVG width in pixels.
+        title: Title text drawn at top-left.
+        banner: Banner text drawn at top-right.
+
+    Returns:
+        The rendered SVG document as a string.
     """
     pts = track.points
     bx, by, bw, bh = _bounds(pts)
@@ -74,7 +82,19 @@ def track_svg(track: TrackFrame, cars: Iterable, width: int = 720,
 
 
 def track_ascii(track: TrackFrame, cars: Iterable, width: int = 70, height: int = 24) -> str:
-    """Render the track + cars as an ASCII grid (track = '.', cars = their id's 1st char)."""
+    """Render the track + cars as an ASCII grid.
+
+    The centreline is drawn with ``.`` and each car with the first character of its id.
+
+    Args:
+        track: Track frame providing the centreline points.
+        cars: Iterable of objects with ``car_id``, ``x``, ``y``.
+        width: Grid width in characters.
+        height: Grid height in rows.
+
+    Returns:
+        The ASCII map as a newline-joined string.
+    """
     pts = track.points
     bx, by, bw, bh = _bounds(pts)
     grid = [[" "] * width for _ in range(height)]

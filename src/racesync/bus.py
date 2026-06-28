@@ -37,7 +37,15 @@ class EventBus:
         self._record = False
 
     def subscribe(self, topic: str, handler: Callable[[object], None]) -> Callable[[], None]:
-        """Subscribe ``handler`` to ``topic``. Returns an unsubscribe callable."""
+        """Subscribe a handler to a topic.
+
+        Args:
+            topic: The topic to subscribe to.
+            handler: Callable invoked with each event published on the topic.
+
+        Returns:
+            A callable that, when invoked, unsubscribes the handler.
+        """
         self._subs[topic].append(handler)
 
         def _unsub() -> None:
@@ -49,6 +57,18 @@ class EventBus:
         return _unsub
 
     def publish(self, topic: str, event: object) -> None:
+        """Dispatch an event to every handler subscribed to a topic.
+
+        Handlers run in subscription order. A handler that raises does not stop the
+        others; all errors are collected and re-raised together once dispatch finishes.
+
+        Args:
+            topic: The topic to publish on.
+            event: The event object passed to each handler.
+
+        Raises:
+            ExceptionGroup: If one or more handlers raised during dispatch.
+        """
         if self._record:
             self._log.append((topic, event))
         errors: list[Exception] = []
@@ -67,6 +87,15 @@ class EventBus:
         self._record = True
 
     def history(self, topic: str | None = None) -> Iterable[tuple[str, object]]:
+        """Return the recorded (topic, event) pairs, optionally filtered by topic.
+
+        Args:
+            topic: If given, return only events published on this topic; otherwise
+                return the full history.
+
+        Returns:
+            A list of (topic, event) pairs in publication order.
+        """
         if topic is None:
             return list(self._log)
         return [(t, e) for (t, e) in self._log if t == topic]

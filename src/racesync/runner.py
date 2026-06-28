@@ -25,10 +25,16 @@ from .sources.base import RawFix
 def merge_streams(sources) -> Iterator[tuple[str, RawFix | TimingEvent]]:
     """Merge multiple sources into one stream ordered by event timestamp.
 
-    Yields ``(source_name, event)``. Sources may be finite (replay) or unbounded (live);
-    a finite source simply drops out of the merge when exhausted. Ordering is a stable
-    k-way merge on ``event.t`` with an insertion counter as tie-breaker (so events with
-    equal timestamps keep arrival order and we never compare event objects).
+    Sources may be finite (replay) or unbounded (live); a finite source simply drops out
+    of the merge when exhausted. Ordering is a stable k-way merge on ``event.t`` with an
+    insertion counter as tie-breaker (so events with equal timestamps keep arrival order
+    and we never compare event objects).
+
+    Args:
+        sources: Iterable of source objects exposing ``stream()`` and an optional ``name``.
+
+    Yields:
+        ``(source_name, event)`` tuples in non-decreasing timestamp order.
     """
     counter = itertools.count()
     heap: list = []
@@ -55,7 +61,17 @@ def merge_streams(sources) -> Iterator[tuple[str, RawFix | TimingEvent]]:
 
 
 class Pipeline:
-    """Drives fusion + state engine from a merged source stream."""
+    """Drives fusion + state engine from a merged source stream.
+
+    Attributes:
+        fusion: Fusion component that turns raw fixes into position estimates.
+        state_engine: Optional race-state engine fed timing events.
+        bus: Optional event bus the produced estimates/events are published on.
+        recorder: Optional recorder capturing raw inputs for replay parity.
+        health: Optional health monitor observing source liveness.
+        logical_now: Latest event timestamp seen so far.
+        counts: Running tally of processed ``fix`` and ``timing`` events.
+    """
 
     def __init__(self, fusion: Fusion, state_engine=None, bus: Optional[EventBus] = None,
                  recorder=None, health=None):
@@ -68,7 +84,18 @@ class Pipeline:
         self.counts = {"fix": 0, "timing": 0}
 
     def feed(self, event: RawFix | TimingEvent, source_name: str = "?"):
-        """Process one event end to end. Returns the produced estimate/event."""
+        """Process one event end to end.
+
+        Args:
+            event: The raw fix or timing event to process.
+            source_name: Name of the source the event came from.
+
+        Returns:
+            The produced position estimate (for a fix) or the timing event (for timing).
+
+        Raises:
+            TypeError: If the event is neither a ``RawFix`` nor a ``TimingEvent``.
+        """
         self.logical_now = max(self.logical_now, event.t)
         if self.recorder is not None:
             self.recorder.record(event)
@@ -92,7 +119,14 @@ class Pipeline:
         raise TypeError(f"unexpected event type: {type(event)!r}")
 
     def run(self, sources: Iterable) -> dict:
-        """Run every source to exhaustion through the pipeline; returns event counts."""
+        """Run every source to exhaustion through the pipeline.
+
+        Args:
+            sources: Iterable of source objects to merge and feed.
+
+        Returns:
+            A dict of event counts (``fix`` and ``timing`` totals).
+        """
         for name, event in merge_streams(list(sources)):
             self.feed(event, name)
         return dict(self.counts)

@@ -37,6 +37,15 @@ DEAD_RECKON_MAX_AGE = 5.0
 
 @dataclass
 class _CarState:
+    """Per-car fusion bookkeeping.
+
+    Attributes:
+        laps_completed: Authoritative lap count for the car.
+        last: Most recent position estimate produced for the car.
+        last_loop_s: Along-track ``s`` pinned at the last loop crossing.
+        anchored_until: Time up to which fixes count as ``FUSED`` quality.
+    """
+
     laps_completed: int = 0
     last: Optional[PositionEstimate] = None
     last_loop_s: Optional[float] = None
@@ -57,7 +66,12 @@ class Fusion:
     # -- ingestion ---------------------------------------------------------- #
 
     def on_timing_event(self, ev: TimingEvent) -> None:
-        """Update lap counting / re-anchoring from authoritative timing."""
+        """Update lap counting and re-anchoring from authoritative timing.
+
+        Args:
+            ev: Authoritative timing event; lap-completed events advance the lap
+                count and pin ``s`` to the start/finish loop, passings re-anchor.
+        """
         if ev.car_id is None:
             return
         car = self._car(ev.car_id)
@@ -69,7 +83,18 @@ class Fusion:
             car.anchored_until = ev.t + self._anchor_window
 
     def on_fix(self, fix: RawFix) -> PositionEstimate:
-        """Map-match a raw fix and produce a unified PositionEstimate."""
+        """Map-match a raw fix and produce a unified position estimate.
+
+        Args:
+            fix: Raw GPS/plane observation for a single car.
+
+        Returns:
+            The unified ``PositionEstimate``, marked ``FUSED`` while within an anchor
+            window of a crossing and ``GPS`` otherwise.
+
+        Raises:
+            ValueError: If the fix is geodetic but the track has no geodetic reference.
+        """
         car = self._car(fix.car_id)
         # Resolve plane coordinates.
         if fix.x is not None and fix.y is not None:
@@ -114,8 +139,16 @@ class Fusion:
         """Best estimate of a car's position at ``now`` when no fresh fix exists.
 
         Advances the last estimate along the track by ``speed * dt`` for short gaps
-        (DEAD_RECKONED); returns a quality-decayed copy without inventing motion for long
-        gaps; returns ``None`` if we have nothing to go on.
+        (DEAD_RECKONED); for long gaps it returns a quality-decayed copy without
+        inventing motion.
+
+        Args:
+            car_id: Car to extrapolate.
+            now: Time to estimate the position at.
+
+        Returns:
+            The extrapolated ``PositionEstimate``, or ``None`` if there is no prior
+            estimate to extrapolate from.
         """
         car = self._cars.get(car_id)
         if car is None or car.last is None:
@@ -146,11 +179,12 @@ class Fusion:
     # -- queries ------------------------------------------------------------ #
 
     def latest(self, car_id: str) -> Optional[PositionEstimate]:
+        """Return the last estimate produced for a car, or ``None`` if unseen."""
         car = self._cars.get(car_id)
         return car.last if car else None
 
     def order(self) -> list[str]:
-        """Current car order by track progress (most-advanced first)."""
+        """Return the current car order by track progress (most-advanced first)."""
         live = [(cid, c.last) for cid, c in self._cars.items() if c.last is not None]
         live.sort(key=lambda kv: kv[1].lap_distance.total, reverse=True)
         return [cid for cid, _ in live]

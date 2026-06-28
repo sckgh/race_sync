@@ -39,6 +39,13 @@ _ALLOWED: dict[RaceState, set[RaceState]] = {
 
 @dataclass
 class _Neutralisation:
+    """A neutralisation interval.
+
+    Attributes:
+        start_t: Time the neutralisation began.
+        end_t: Time it ended, or ``None`` while still ongoing.
+    """
+
     start_t: float
     end_t: Optional[float] = None
 
@@ -80,11 +87,20 @@ class RaceStateEngine:
     # -- operator actions (specs/06 §6.2–6.4) ------------------------------ #
 
     def arm(self, t: Optional[float] = None) -> None:
-        """PRE_RACE -> FORMATION: virtual field forms up, held until green."""
+        """Transition PRE_RACE -> FORMATION so the virtual field forms up until green.
+
+        Args:
+            t: Timestamp of the action; falls back to the configured clock if omitted.
+        """
         self._transition(RaceState.FORMATION, self._now(t), "operator", "arm formation")
 
     def go_green(self, t: Optional[float] = None, real_start: bool = True) -> None:
-        """Release the field (start) or restart after a neutralisation."""
+        """Release the field (start) or restart after a neutralisation.
+
+        Args:
+            t: Timestamp of the action; falls back to the configured clock if omitted.
+            real_start: Whether this represents the real field's start.
+        """
         now = self._now(t)
         restart = self.state == RaceState.NEUTRALISED
         if restart and self._neutralisations and self._neutralisations[-1].end_t is None:
@@ -99,6 +115,11 @@ class RaceStateEngine:
 
         ``on`` from GREEN neutralises the field; ``off`` restarts (equivalent to
         ``go_green`` from NEUTRALISED). Laps keep counting throughout (specs/06 §6.3).
+
+        Args:
+            on: ``True`` to neutralise the field, ``False`` to restart.
+            t: Timestamp of the action; falls back to the configured clock if omitted.
+            reason: Optional reason recorded with the transition.
         """
         now = self._now(t)
         if on:
@@ -109,7 +130,12 @@ class RaceStateEngine:
             self.go_green(now)
 
     def arm_finish(self, t: Optional[float] = None, car_id: Optional[str] = None) -> None:
-        """Mark that the real leader has completed the distance; chequer can now fire."""
+        """Mark that the real leader has completed the distance so the chequer can fire.
+
+        Args:
+            t: Timestamp of completion; falls back to the configured clock if omitted.
+            car_id: Identifier of the leading car, if known.
+        """
         self.finish_armed = True
         self.finish_t = self._now(t)
         if car_id is not None:
@@ -120,6 +146,13 @@ class RaceStateEngine:
 
         Requires the finish to be armed by authoritative timing unless ``force`` (an
         explicit operator override, recorded as such in the audit log).
+
+        Args:
+            t: Timestamp of the action; falls back to the configured clock if omitted.
+            force: Override that fires the chequer even when the finish is not armed.
+
+        Raises:
+            InvalidTransition: If the finish is not armed and ``force`` is ``False``.
         """
         if not self.finish_armed and not force:
             raise InvalidTransition("finish not armed (real leader has not completed distance)")
@@ -135,7 +168,12 @@ class RaceStateEngine:
     # -- timing inputs (specs/06 §6.4) ------------------------------------- #
 
     def on_timing_event(self, ev: TimingEvent) -> None:
-        """React to authoritative timing: track leader, arm the timed finish."""
+        """React to authoritative timing by tracking the leader and arming the finish.
+
+        Args:
+            ev: Authoritative timing event (leader change, lap completed, or race
+                completed).
+        """
         if ev.kind == TimingEventKind.LEADER_CHANGED:
             self.leader_car = ev.car_id
             if ev.lap is not None:
@@ -161,7 +199,16 @@ class RaceStateEngine:
         return total
 
     def start_skew(self, virtual_green_t: float) -> Optional[float]:
-        """Signed seconds the virtual field went green after the real field (specs/06)."""
+        """Return signed seconds the virtual field went green after the real field.
+
+        See specs/06.
+
+        Args:
+            virtual_green_t: Time the virtual field went green.
+
+        Returns:
+            The signed skew in seconds, or ``None`` if the real field has not gone green.
+        """
         if self.green_t is None:
             return None
         return virtual_green_t - self.green_t

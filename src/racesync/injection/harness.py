@@ -33,14 +33,27 @@ class Verdict(str, Enum):
 
 @dataclass(frozen=True)
 class LatencyTargets:
-    """Latency thresholds in seconds (specs/09 §9.1)."""
+    """Latency thresholds in seconds (specs/09 §9.1).
+
+    Attributes:
+        typical: Target p50; latency should be at or under this.
+        degraded: Target p95; a p95 over this counts as degraded/fail.
+    """
 
     typical: float = 0.25     # p50 should be at/under this
     degraded: float = 0.50    # p95 over this = degraded/fail
 
 
 def _percentile(sorted_vals: list[float], pct: float) -> float:
-    """Linear-interpolated percentile (pct in [0, 100]) of a sorted list."""
+    """Compute the linear-interpolated percentile of a sorted list.
+
+    Args:
+        sorted_vals: Values sorted in ascending order.
+        pct: Percentile to compute, in [0, 100].
+
+    Returns:
+        The interpolated percentile value, or 0.0 if the list is empty.
+    """
     if not sorted_vals:
         return 0.0
     if len(sorted_vals) == 1:
@@ -54,6 +67,17 @@ def _percentile(sorted_vals: list[float], pct: float) -> float:
 
 @dataclass
 class LatencyStats:
+    """Summary statistics for a set of latency samples (seconds).
+
+    Attributes:
+        n: Number of samples.
+        min: Smallest sample.
+        p50: 50th-percentile (median) sample.
+        p95: 95th-percentile sample.
+        max: Largest sample.
+        mean: Arithmetic mean of the samples.
+    """
+
     n: int = 0
     min: float = 0.0
     p50: float = 0.0
@@ -63,6 +87,14 @@ class LatencyStats:
 
     @classmethod
     def from_samples(cls, samples: list[float]) -> "LatencyStats":
+        """Compute summary statistics from raw latency samples.
+
+        Args:
+            samples: Latency samples in seconds, in any order.
+
+        Returns:
+            A LatencyStats over the samples, or a zeroed instance if none are given.
+        """
         if not samples:
             return cls()
         s = sorted(samples)
@@ -75,6 +107,15 @@ class LatencyStats:
 
 @dataclass
 class SpikeReport:
+    """Outcome of an injection spike run: stats, targets, verdict and notes.
+
+    Attributes:
+        stats: Measured latency statistics for the run.
+        targets: Latency targets the run was scored against.
+        verdict: The pass/marginal/fail verdict.
+        notes: Free-form notes accumulated during the run (e.g. clock-skew warnings).
+    """
+
     stats: LatencyStats
     targets: LatencyTargets
     verdict: Verdict
@@ -94,6 +135,16 @@ class SpikeReport:
 
 
 def score(stats: LatencyStats, targets: LatencyTargets) -> Verdict:
+    """Grade latency statistics against the targets.
+
+    Args:
+        stats: The measured latency statistics.
+        targets: The latency thresholds to score against.
+
+    Returns:
+        Verdict.PASS when p50 is within typical and p95 within degraded, Verdict.MARGINAL
+        when only p50 is within degraded, and Verdict.FAIL otherwise (including no samples).
+    """
     if stats.n == 0:
         return Verdict.FAIL
     if stats.p50 <= targets.typical and stats.p95 <= targets.degraded:
@@ -116,10 +167,19 @@ class InjectionHarness:
         self.notes: list[str] = []
 
     def inject(self, est, apply_latency: Optional[float] = None) -> float:
-        """Inject one estimate's phantom state; return the measured latency sample.
+        """Inject one estimate's phantom state and return the measured latency sample.
 
         If ``apply_latency`` is given (simulation mode), it is used directly; otherwise
         latency is ``clock() - est.t`` measured right after the adapter applies (live mode).
+        Negative latencies (clock skew) are clamped to 0.0 and noted.
+
+        Args:
+            est: A position estimate to convert into a phantom state and apply.
+            apply_latency: Modelled latency in seconds for simulation mode; when None,
+                latency is measured live from the clock.
+
+        Returns:
+            The latency sample in seconds.
         """
         state = PhantomState.from_estimate(est)
         self.adapter.apply(state)
@@ -132,13 +192,27 @@ class InjectionHarness:
 
     def run(self, estimates: Iterable,
             latency_model: Optional[Callable[[int, object], float]] = None) -> SpikeReport:
-        """Inject a sequence of estimates. ``latency_model(i, est) -> seconds`` (optional)
-        supplies a modelled latency per sample for offline simulation runs."""
+        """Inject a sequence of estimates and produce a spike report.
+
+        Args:
+            estimates: The position estimates to inject in order.
+            latency_model: Optional callable ``(i, est) -> seconds`` supplying a modelled
+                latency per sample for offline simulation runs.
+
+        Returns:
+            The SpikeReport summarising the run.
+        """
         for i, est in enumerate(estimates):
             self.inject(est, apply_latency=(latency_model(i, est) if latency_model else None))
         return self.report()
 
     def report(self) -> SpikeReport:
+        """Build a spike report from the samples collected so far.
+
+        Returns:
+            A SpikeReport with computed stats, verdict and notes; a note is added when no
+            samples were collected.
+        """
         stats = LatencyStats.from_samples(self.samples)
         verdict = score(stats, self.targets)
         notes = list(self.notes)

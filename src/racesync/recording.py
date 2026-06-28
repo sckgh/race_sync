@@ -20,7 +20,16 @@ from .sources.base import RawFix
 
 
 def to_record(event: RawFix | TimingEvent) -> Optional[dict]:
-    """Convert a raw event to a JSONL record dict (None keys omitted for tidiness)."""
+    """Convert a raw event to a JSONL record dict.
+
+    Keys whose values are ``None`` are omitted for tidiness.
+
+    Args:
+        event: The raw fix or timing event to serialize.
+
+    Returns:
+        A record dict, or ``None`` if the event is of an unrecognised type.
+    """
     if isinstance(event, RawFix):
         rec = {"type": "fix", "car_id": event.car_id, "t": event.t}
         for k in ("lat", "lon", "x", "y", "speed", "heading"):
@@ -44,11 +53,17 @@ def to_record(event: RawFix | TimingEvent) -> Optional[dict]:
 
 
 class FeedRecorder:
-    """Append raw events to a JSONL file. Usable as a context manager.
+    """Append raw events to a JSONL file.
+
+    Usable as a context manager::
 
         with FeedRecorder("session.jsonl") as rec:
             pipeline = Pipeline(fusion, recorder=rec, ...)
             pipeline.run(sources)
+
+    Attributes:
+        path: Destination JSONL file path.
+        count: Number of records written so far.
     """
 
     def __init__(self, path: str | Path):

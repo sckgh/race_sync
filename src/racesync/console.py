@@ -30,6 +30,13 @@ RACE_LAPS = 77  # Sydney 300 distance (specs/02); display only
 
 @dataclass
 class CommandResult:
+    """Outcome of dispatching one operator command.
+
+    Attributes:
+        ok: Whether the command succeeded.
+        message: Human-readable result or error message.
+    """
+
     ok: bool
     message: str
 
@@ -47,6 +54,16 @@ HELP = """commands:
 
 
 class OperatorConsole:
+    """Operator control surface: command handling plus a dashboard view-model.
+
+    Attributes:
+        engine: Race-state engine driven by operator commands.
+        health: Health monitor surfaced on the dashboard.
+        scoring: Scoring service queried for classifications and penalties.
+        adapter: Optional sim injection adapter pushed global state (e.g. Code 60).
+        last_message: The most recent command result message shown on the dashboard.
+    """
+
     def __init__(self, engine: RaceStateEngine, health: HealthMonitor,
                  scoring: ScoringService, adapter: Optional[SimInjectionAdapter] = None,
                  clock=None):
@@ -68,7 +85,17 @@ class OperatorConsole:
     # -- command handling --------------------------------------------------- #
 
     def dispatch(self, line: str, t: Optional[float] = None) -> CommandResult:
-        """Parse and execute one operator command. Never raises on bad input."""
+        """Parse and execute one operator command.
+
+        Never raises on bad input; failures are returned as a non-ok result.
+
+        Args:
+            line: The raw command line entered by the operator.
+            t: Optional explicit logical time; falls back to the clock or engine time.
+
+        Returns:
+            The command result.
+        """
         try:
             parts = shlex.split(line.strip())
         except ValueError as exc:
@@ -193,7 +220,12 @@ class OperatorConsole:
     # -- interactive loop --------------------------------------------------- #
 
     def run(self, input_fn=input, output_fn=print) -> None:
-        """Simple REPL: render, read a command, act, repeat until quit."""
+        """Run a simple REPL: render, read a command, act, repeat until quit.
+
+        Args:
+            input_fn: Callable that prompts for and returns a line of input.
+            output_fn: Callable that writes a line of output.
+        """
         output_fn(self.render())
         while True:
             try:

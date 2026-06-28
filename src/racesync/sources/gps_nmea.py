@@ -36,7 +36,14 @@ _GGA_QUALITY = {
 
 
 def _nmea_checksum_ok(sentence: str) -> bool:
-    """Validate an NMEA sentence's ``*HH`` checksum. Returns True if absent."""
+    """Validate an NMEA sentence's ``*HH`` checksum.
+
+    Args:
+        sentence: The raw NMEA sentence to validate.
+
+    Returns:
+        True if the checksum matches or is absent, False otherwise.
+    """
     if "*" not in sentence:
         return True
     body, _, cks = sentence.partition("*")
@@ -51,7 +58,15 @@ def _nmea_checksum_ok(sentence: str) -> bool:
 
 
 def _dm_to_deg(value: str, hemi: str) -> Optional[float]:
-    """Convert NMEA ddmm.mmmm + hemisphere to signed decimal degrees."""
+    """Convert NMEA ddmm.mmmm + hemisphere to signed decimal degrees.
+
+    Args:
+        value: The NMEA ddmm.mmmm coordinate string.
+        hemi: The hemisphere indicator (N/S/E/W).
+
+    Returns:
+        The signed decimal degrees, or None if ``value`` is empty.
+    """
     if not value:
         return None
     dot = value.find(".")
@@ -69,8 +84,12 @@ class NmeaParser:
     """Stateful NMEA parser for one receiver / car.
 
     Holds the latest known quality (from GGA) so an RMC sentence that lacks it still gets
-    a sensible value. ``base_epoch`` (seconds) anchors NMEA's time-of-day to the aligned
-    clock; if not given, wall-clock arrival time is used as ``t``.
+    a sensible value.
+
+    Attributes:
+        car_id: Identifier of the car this parser produces fixes for.
+        base_epoch: Seconds anchoring NMEA's time-of-day to the aligned clock; if not
+            given, wall-clock arrival time is used as ``t``.
     """
 
     car_id: str
@@ -79,6 +98,18 @@ class NmeaParser:
     _last_quality_label: str = "unknown"
 
     def parse(self, line: str, arrival_t: Optional[float] = None) -> Optional[RawFix]:
+        """Parse a single NMEA line into a RawFix.
+
+        Only GGA and RMC sentences are handled; other sentences, invalid checksums and
+        unparseable fields yield None.
+
+        Args:
+            line: A single raw NMEA text line.
+            arrival_t: Wall-clock arrival time used as the fix timestamp when provided.
+
+        Returns:
+            A RawFix for a parseable GGA/RMC sentence, otherwise None.
+        """
         line = line.strip()
         if not line or not _nmea_checksum_ok(line):
             return None
@@ -138,9 +169,13 @@ class NmeaParser:
 class NmeaGpsSource:
     """Adapt an iterable of NMEA lines (per car) to the PositionSource protocol.
 
-    ``streams`` maps ``car_id -> iterable of NMEA text lines``. Lines are consumed
-    round-robin so a multi-car replay interleaves naturally. For a live receiver, pass a
-    single car's socket/serial line generator.
+    Lines are consumed round-robin so a multi-car replay interleaves naturally. For a live
+    receiver, pass a single car's socket/serial line generator.
+
+    Args:
+        streams: Mapping of ``car_id`` to an iterable of NMEA text lines.
+        base_epoch: Seconds anchoring NMEA time-of-day to the aligned clock; passed to each
+            per-car parser.
     """
 
     def __init__(self, streams: dict[str, Iterable[str]], base_epoch: Optional[float] = None):
@@ -151,6 +186,11 @@ class NmeaGpsSource:
         self._exhausted = False
 
     def stream(self) -> Iterator[RawFix]:
+        """Consume the per-car line streams round-robin and parse them.
+
+        Yields:
+            Each successfully parsed RawFix until every car's stream is exhausted.
+        """
         active = dict(self._streams)
         while active:
             for cid in list(active):
@@ -166,6 +206,7 @@ class NmeaGpsSource:
         self._exhausted = True
 
     def health(self) -> SourceHealth:
+        """Report a liveness/quality snapshot for this source."""
         return SourceHealth(
             connected=not self._exhausted,
             last_packet_age=0.0 if self._count else float("inf"),

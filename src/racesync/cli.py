@@ -31,10 +31,17 @@ from .track import TrackFrame
 
 
 def _oval_track(length_target: float = 3896.0, name: str = "demo-oval") -> TrackFrame:
-    """A closed oval centreline scaled to ~``length_target`` metres (SMSP-ish for demo).
+    """Build a closed oval centreline scaled to ~``length_target`` metres (SMSP-ish).
 
     Real use loads a surveyed SMSP centreline via ``TrackFrame.from_geojson_line``; this
     is only so ``demo`` runs with no data files.
+
+    Args:
+        length_target: Target perimeter length in metres to scale the oval to.
+        name: Name assigned to the resulting track frame.
+
+    Returns:
+        A closed oval ``TrackFrame``.
     """
     pts = []
     n = 64
@@ -48,7 +55,14 @@ def _oval_track(length_target: float = 3896.0, name: str = "demo-oval") -> Track
 
 
 def _demo(args) -> int:
-    """A short hybrid race through the whole stack: pipeline, state, scoring, health."""
+    """Run a short hybrid race through the whole stack: pipeline, state, scoring, health.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
+    """
     track = _oval_track()
     bus = EventBus()
     fusion = Fusion(track)
@@ -120,6 +134,14 @@ def _demo(args) -> int:
 
 
 def _replay(args) -> int:
+    """Replay a recorded JSONL feed through the pipeline, optionally re-recording it.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
+    """
     track = TrackFrame.from_geojson_line(args.track) if args.track else _oval_track()
     bus = EventBus()
     fusion = Fusion(track)
@@ -149,7 +171,17 @@ def _replay(args) -> int:
 
 
 def _load_nmea_dir(directory):
-    """Build an NmeaGpsSource from a directory of car_*.nmea files."""
+    """Build an NmeaGpsSource from a directory of car_*.nmea files.
+
+    Args:
+        directory: Directory containing ``car_*.nmea`` files.
+
+    Returns:
+        A ``(NmeaGpsSource, car_ids)`` tuple.
+
+    Raises:
+        SystemExit: If no ``car_*.nmea`` files are found in the directory.
+    """
     from pathlib import Path
 
     from .sources.gps_nmea import NmeaGpsSource
@@ -162,7 +194,15 @@ def _load_nmea_dir(directory):
 
 
 def _estimates_from_feed(args, fusion):
-    """Produce position estimates from either a JSONL feed or an NMEA directory."""
+    """Produce position estimates from either a JSONL feed or an NMEA directory.
+
+    Args:
+        args: Parsed CLI arguments.
+        fusion: Fusion component used to turn fixes into estimates.
+
+    Returns:
+        A list of position estimates.
+    """
     if getattr(args, "nmea_dir", None):
         from .simgen import make_smsp_track  # noqa: F401 (ref kept for clarity)
 
@@ -178,12 +218,18 @@ def _estimates_from_feed(args, fusion):
 
 
 def _spike(args) -> int:
-    """Phase-1 injection spike: drive a feed's positions into a sim adapter, measure latency.
+    """Drive a feed's positions into a sim adapter and measure injection latency.
 
     This is the OFFLINE simulation mode (specs/05 §5.4): replay timestamps are logical, so
     latency is modelled (``--sim-latency`` base + small deterministic jitter) to exercise
     the measurement + scoring machinery. A LIVE spike swaps the loopback adapter for the AC
     adapter, feeds real captured timestamps, and lets the harness time the clock directly.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
     """
     # NMEA input is SMSP-anchored; pick the matching track so map-matching is meaningful.
     if getattr(args, "nmea_dir", None):
@@ -217,7 +263,14 @@ def _spike(args) -> int:
 
 
 def _console(args) -> int:
-    """Launch the operator console. Interactive REPL, or a scripted demo by default."""
+    """Launch the operator console as an interactive REPL or a scripted demo.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
+    """
     bus = EventBus()
     engine = RaceStateEngine(bus=bus)
     health = HealthMonitor(bus=bus, state_engine=engine)
@@ -251,7 +304,14 @@ def _console(args) -> int:
 
 
 def _visualize(args) -> int:
-    """Render car positions on the track to an SVG (and an ASCII preview)."""
+    """Render car positions on the track to an SVG and an ASCII preview.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
+    """
     from .viz import track_ascii, track_svg
 
     if args.nmea_dir:
@@ -276,7 +336,14 @@ def _visualize(args) -> int:
 
 
 def _gen_nmea(args) -> int:
-    """Generate NMEA 0183 test data for a field of cars (specs/11, specs/12)."""
+    """Generate NMEA 0183 test data for a field of cars (specs/11, specs/12).
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Process exit code.
+    """
     from pathlib import Path
 
     from .simgen import default_field, make_smsp_track, sample_to_nmea, simulate
@@ -317,7 +384,7 @@ def _ac_bridge(args) -> int:
     """Run the UDP -> shared-memory bridge that feeds the CSP Lua phantom script.
 
     Args:
-        args: Parsed CLI arguments (``file``, ``host``, ``port``).
+        args: Parsed CLI arguments.
 
     Returns:
         Process exit code.
@@ -334,6 +401,14 @@ def _ac_bridge(args) -> int:
 
 
 def main(argv=None) -> int:
+    """Parse arguments and dispatch to the selected subcommand.
+
+    Args:
+        argv: Optional argument vector; defaults to ``sys.argv`` when ``None``.
+
+    Returns:
+        Process exit code from the dispatched subcommand.
+    """
     parser = argparse.ArgumentParser(prog="racesync", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
